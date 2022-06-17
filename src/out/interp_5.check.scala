@@ -4,39 +4,11 @@ Emitting Generated Code
 class Snippet() extends (Array[Int] => Array[Int]) {
   def apply(x0: Array[Int]): Array[Int] = {
     x0(0) = 1
-    x0(1) = x0(1) + x0(1)
-    val x1 = x0(0)
+    val x1 = x0(1) + x0(1)
+    x0(1) = x1
+    x0(0) = 2
     if (x1 == 0) {
-      x0(0) = 1
-      x0(1) = x0(1) + x0(1)
-    }
-    if (x1 == 1) {
-      x0(0) = 2
-      if (x0(1) == 0) {
-        x0(0) = 0
-      }
-    }
-    val x2 = x0(0)
-    if (x2 == 0) {
-      x0(0) = 1
-      x0(1) = x0(1) + x0(1)
-    }
-    if (x2 == 1) {
-      x0(0) = 2
-      if (x0(1) == 0) {
-        x0(0) = 0
-      }
-    }
-    val x3 = x0(0)
-    if (x3 == 0) {
-      x0(0) = 1
-      x0(1) = x0(1) + x0(1)
-    }
-    if (x3 == 1) {
-      x0(0) = 2
-      if (x0(1) == 0) {
-        x0(0) = 0
-      }
+      x0(0) = 0
     }
     x0
   }
