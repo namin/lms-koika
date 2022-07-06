@@ -307,4 +307,31 @@ class InterpCTest extends TutorialFunSuite {
     }
     check("branching_4r", snippet.code)
   }
+
+  test("branching 4 encoding") {
+    val snippet = new DslDriverX[Array[Boolean], Int] with InterpC {
+      def snippet(a: Rep[Array[Boolean]]) = {
+        val s = Array(1,2,3,4,5)
+        val b1 = a(0)
+        def branch1(b1: Rep[Boolean], b2: => Rep[Boolean]) = {
+          if (b1) {
+            s(1) = 4
+            branch2(b2)
+          } else {
+            s(1) = 5
+            branch2(b2)
+          }
+        }
+        branch1(a(0), s(1) == 5)
+        def branch2(b2: Rep[Boolean]) = {
+          if (b2) {
+            s(1) = 4
+          }
+        }
+        s(1)
+      }
+    }
+    check("branching_4e", snippet.code)
+  }
+
 }
