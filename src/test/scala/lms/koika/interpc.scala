@@ -241,4 +241,97 @@ class InterpCTest extends TutorialFunSuite {
     // this program should simplify the branches, but it does not
     check("6", snippet.code)
   }
+
+  test("branching 4") {
+    val snippet = new DslDriverX[Array[Boolean], Int] with InterpC {
+      def snippet(a: Rep[Array[Boolean]]) = {
+        val s = Array(1,2,3,4,5)
+        if (a(0)) {
+          s(1) = 4
+        } else {
+          s(1) = 5
+        }
+        if (s(1) == 5) {
+          s(1) = 4
+        }
+        s(1)
+      }
+    }
+    // fails to generate just return 4
+    check("branching_4", snippet.code)
+  }
+
+  test("branching 4 indirection") {
+    val snippet = new DslDriverX[Array[Boolean], Int] with InterpC {
+      def snippet(a: Rep[Array[Boolean]]) = {
+        val s = Array(1,2,3,4,5)
+        val b1 = a(0)
+        def branch1(b1: Rep[Boolean]) = {
+          if (b1) {
+            s(1) = 4
+          } else {
+            s(1) = 5
+          }
+        }
+        branch1(b1)
+        val b2 = s(1) == 5
+        def branch2(b2: Rep[Boolean]) = {
+          if (b2) {
+            s(1) = 4
+          }
+        }
+        branch2(b2)
+        s(1)
+      }
+    }
+    check("branching_4", snippet.code)
+  }
+
+  test("branching 4 rewrite") {
+    val snippet = new DslDriverX[Array[Boolean], Int] with InterpC {
+      def snippet(a: Rep[Array[Boolean]]) = {
+        val s = Array(1,2,3,4,5)
+        if (a(0)) {
+          s(1) = 4
+          if (s(1) == 5) {
+            s(1) = 4
+          }
+        } else {
+          s(1) = 5
+          if (s(1) == 5) {
+            s(1) = 4
+          }
+        }
+        s(1)
+      }
+    }
+    check("branching_4r", snippet.code)
+  }
+
+  test("branching 4 encoding") {
+    val snippet = new DslDriverX[Array[Boolean], Int] with InterpC {
+      def snippet(a: Rep[Array[Boolean]]) = {
+        val s = Array(1,2,3,4,5)
+        val b1 = a(0)
+        def branch1(b1: Rep[Boolean], b2: => Rep[Boolean]) = {
+          if (b1) {
+            s(1) = 4
+            branch2(b2)
+          } else {
+            s(1) = 5
+            branch2(b2)
+          }
+        }
+        branch1(a(0), s(1) == 5)
+        def branch2(b2: Rep[Boolean]) = {
+          if (b2) {
+            s(1) = 4
+          }
+        }
+        s(1)
+      }
+    }
+    check("branching_4e", snippet.code)
+  }
+
 }
