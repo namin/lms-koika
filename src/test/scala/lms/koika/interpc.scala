@@ -241,4 +241,23 @@ class InterpCTest extends TutorialFunSuite {
     // this program should simplify the branches, but it does not
     check("6", snippet.code)
   }
+
+  test("branching 4") {
+    val snippet = new DslDriverX[Array[Boolean], Int] with InterpC {
+      def snippet(a: Rep[Array[Boolean]]) = {
+        val s = Array(1,2,3,4,5)
+        if (a(0)){
+          s(1) = 4
+        } else {
+          s(1) = 5
+        }
+        if (s(1) == 5) {
+          s(1) = 4
+        }
+        s(1)
+      }
+    }
+    // fails to generate just return 4
+    check("branching_4", snippet.code)
+  }
 }
