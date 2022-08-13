@@ -113,7 +113,6 @@ class IfTail extends TutorialFunSuite {
   }
 }
 
-/*
 @virtualize
 class InterpCaIfTailTest extends TutorialFunSuite {
   val under = "interpca_iftail_" 
@@ -257,7 +256,7 @@ class InterpCaIfTailTest extends TutorialFunSuite {
     }
   }
 
-  abstract class DslDriverX[A:Manifest,B:Manifest] extends DslDriverC[A,B] { q =>
+  abstract class DslDriverX[A:Manifest,B:Manifest] extends IfTailCDslDriver[A,B] { q =>
     override val codegen = new DslGenC with lms.thirdparty.CCodeGenLibs {
       val IR: q.type = q
 
@@ -318,7 +317,8 @@ class InterpCaIfTailTest extends TutorialFunSuite {
     // this program should simplify the branches, but it does not
     check("5", snippet.code)
   }
-  test("interp 6") {
+  // TODO: this program seems to loop and fills with the Warning: already have a subst.
+  ignore("interp 6") {
     val snippet = new DslDriverX[stateT,stateT] with InterpCaIfTail {
       def snippet(s: Rep[stateT]) = {
         set_state_pc(s, 0)
@@ -337,4 +337,3 @@ class InterpCaIfTailTest extends TutorialFunSuite {
     check("6", snippet.code)
   }
 }
- */
