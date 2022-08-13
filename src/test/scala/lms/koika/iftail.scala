@@ -59,10 +59,10 @@ abstract class IfTailCDslDriver[A:Manifest,B:Manifest] extends DslSnippet[A,B] w
 
   lazy val code: String = {
     val source = new java.io.ByteArrayOutputStream()
-    val gen = new ExtendedCCodeGen
-    gen.typeMap = Adapter.typeMap
-    gen.stream = new java.io.PrintStream(source)
-    gen.emitAll(tg, "Snippet")(manifest[A],manifest[B])
+    //val gen = new ExtendedCCodeGen
+    codegen.typeMap = Adapter.typeMap
+    codegen.stream = new java.io.PrintStream(source)
+    codegen.emitAll(tg, "Snippet")(manifest[A],manifest[B])
     source.toString
   }
 
