@@ -318,7 +318,7 @@ class InterpCaIfTailTest extends TutorialFunSuite {
     check("5", snippet.code)
   }
   // TODO: this program seems to loop and fills with the Warning: already have a subst.
-  ignore("interp 6") {
+  test("interp 6") {
     val snippet = new DslDriverX[stateT,stateT] with InterpCaIfTail {
       def snippet(s: Rep[stateT]) = {
         set_state_pc(s, 0)
@@ -326,10 +326,14 @@ class InterpCaIfTailTest extends TutorialFunSuite {
         execute(prog,s)
         fetch(s)
         execute(prog,s)
-        fetch(s)
-        execute(prog,s)
-        fetch(s)
-        execute(prog,s)
+        /*
+         // TODO: exponential blowup!
+         fetch(s)
+         execute(prog,s)
+         // over 100,000 lines of code!
+         fetch(s)
+         execute(prog,s)
+         */
         s
       }
     }
