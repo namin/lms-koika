@@ -3,7 +3,9 @@
 An early experiment.
 
 ## Install
-- in parent directory: `git clone https://github.com/TiarkRompf/lms-clean.git`
+- in parent directory: `git clone https://github.com/namin/lms-clean.git`
+- `cd lms-clean`
+- `git checkout x-koika-rewrite-chains-rec`
 
 ## Run
 - `sbt test`
