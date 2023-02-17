@@ -15,7 +15,7 @@ class InterpCbTest extends TutorialFunSuite {
     super.check(label, code, suffix)
 
   type stateT = Array[Int]
-  trait InterpCa extends Dsl with lms.thirdparty.CLibs {
+  trait InterpCb extends Dsl with lms.thirdparty.CLibs {
     def state_pc(s: Rep[stateT]): Rep[Int] =
       s(0)
     def set_state_pc(s: Rep[stateT], pc: Rep[Int]): Rep[Unit] =
@@ -156,14 +156,14 @@ class InterpCbTest extends TutorialFunSuite {
   }
 
   test("interp 1") {
-    val snippet = new DslDriverX[Int,Int] with InterpCa {
+    val snippet = new DslDriverX[Int,Int] with InterpCb {
       def snippet(a: Rep[Int]) = id(id(a))
     }
     check("1", snippet.code)
   }
 
   test("interp 2") {
-    val snippet = new DslDriverX[stateT,stateT] with InterpCa {
+    val snippet = new DslDriverX[stateT,stateT] with InterpCb {
       def snippet(s: Rep[stateT]) = {
         step_aux(prog, s, 0)
         s
@@ -173,7 +173,7 @@ class InterpCbTest extends TutorialFunSuite {
   }
 
   test("interp 3") {
-    val snippet = new DslDriverX[stateT,stateT] with InterpCa {
+    val snippet = new DslDriverX[stateT,stateT] with InterpCb {
       def snippet(s: Rep[stateT]) = {
         step(prog, s)
         s
@@ -183,7 +183,7 @@ class InterpCbTest extends TutorialFunSuite {
   }
 
   test("interp 4") {
-    val snippet = new DslDriverX[stateT,stateT] with InterpCa {
+    val snippet = new DslDriverX[stateT,stateT] with InterpCb {
       def snippet(s: Rep[stateT]) = {
         set_state_pc(s, 0)
         step(prog, s)
@@ -195,7 +195,7 @@ class InterpCbTest extends TutorialFunSuite {
   }
 
   test("interp 5") {
-    val snippet = new DslDriverX[stateT,stateT] with InterpCa {
+    val snippet = new DslDriverX[stateT,stateT] with InterpCb {
       def snippet(s: Rep[stateT]) = {
         set_state_pc(s, 0)
         step(prog, s)
@@ -209,7 +209,7 @@ class InterpCbTest extends TutorialFunSuite {
     check("5", snippet.code)
   }
   test("interp 6") {
-    val snippet = new DslDriverX[stateT,stateT] with InterpCa {
+    val snippet = new DslDriverX[stateT,stateT] with InterpCb {
       def snippet(s: Rep[stateT]) = {
         set_state_pc(s, 0)
         fetch(s)
