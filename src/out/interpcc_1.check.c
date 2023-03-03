@@ -6,6 +6,9 @@ Emitting C Generated Code
 #include <stdio.h>
 #include <stdint.h>
 #include <stdbool.h>
+/************* Function Declarations **************/
+void x1(int*);
+void x3(int*);
 /************* Functions **************/
 void x1(int* x2) {
   x2[0] = x2[0] + x2[0];

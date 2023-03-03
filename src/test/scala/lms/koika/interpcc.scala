@@ -63,6 +63,38 @@ class InterpCcTest extends TutorialFunSuite {
       val IR: q.type = q
 
       registerHeader("\"state.h\"")
+
+      override def emitAll(g: lms.core.Graph, name: String)(m1:Manifest[_],m2:Manifest[_]): Unit = {
+        val ng = init(g)
+        val efs = "" //quoteEff(g.block.ein)
+        val stt = dce.statics.toList.map(quoteStatic).mkString(", ")
+        prepareHeaders
+        emitln("""
+    |/*****************************************
+    |Emitting C Generated Code
+    |*******************************************/
+    """.stripMargin)
+        val src = run(name, ng)
+        emitDefines(stream)
+        emitHeaders(stream)
+        emitFunctionDecls(stream)
+        emitDatastructures(stream)
+        emitFunctions(stream)
+        emitInit(stream)
+        emitln(s"\n/**************** $name ****************/")
+        emit(src)
+        emitln("""
+    |/*****************************************
+    |End of C Generated Code
+    |*******************************************/
+    |int main(int argc, char *argv[]) {
+    |  if (argc != 2) {
+    |    printf("usage: %s <arg>\n", argv[0]);
+    |    return 0;
+    |  }""".stripMargin)
+        if (initStream.size > 0) emitln("if (init()) return 0;")
+        emitln(s"  $name(${convert("argv[1]", m1)});\n  return 0;\n}")
+      }
     }
   }
 
