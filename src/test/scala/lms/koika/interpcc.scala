@@ -100,7 +100,7 @@ class InterpCcTest extends TutorialFunSuite {
 
   test("interp 1") {
     val snippet = new DslDriverX[stateT,Unit] with InterpCc {
-      def snippet(s: Rep[stateT]): Rep[Unit] = execute(0, s)
+      def snippet(s: Rep[stateT]): Rep[Unit] = call(0, s)
     }
     check("1", snippet.code)
   }
