@@ -59,10 +59,8 @@ class InterpCcTest extends TutorialFunSuite {
   }
 
   abstract class DslDriverX[A:Manifest,B:Manifest] extends DslDriverC[A,B] { q =>
-    override val codegen = new DslGenC with lms.thirdparty.CCodeGenLibs {
+    override val codegen = new DslGenC {
       val IR: q.type = q
-
-      registerHeader("\"state.h\"")
 
       override def emitAll(g: lms.core.Graph, name: String)(m1:Manifest[_],m2:Manifest[_]): Unit = {
         val ng = init(g)
