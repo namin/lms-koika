@@ -205,4 +205,12 @@ class InterpCcTest extends TutorialFunSuite {
     check("2s", snippet.code)
   }
 
+  test("interp 2sc") {
+    val snippet = new DslDriverX[stateT,Unit] with InterpCcSpeculative with InterpCcCache {
+      override val prog =  Vector(Branch(0, 3), Load(1, 0, 0), Load(2, 4, 1))
+      def snippet(s: Rep[stateT]): Rep[Unit] = call(0, s)
+    }
+    check("2sc", snippet.code)
+  }
+
 }
