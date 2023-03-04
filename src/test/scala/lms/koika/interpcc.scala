@@ -111,7 +111,7 @@ class InterpCcTest extends TutorialFunSuite {
       case None => {
         if (i < prog.length) {
           prog(i) match {
-            case Branch(rs, target) => {
+            case Branch(rs, target) if target > i => {
               inBranch = Some(Branch(rs, target))
               call(i+1, s)
             }
