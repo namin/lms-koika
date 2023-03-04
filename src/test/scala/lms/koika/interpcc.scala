@@ -73,6 +73,15 @@ class InterpCcTest extends TutorialFunSuite {
     }
   }
 
+  trait InterpCcSpeculative extends InterpCc {
+    override def execute(i: Int, s: Rep[stateT]): Rep[Unit] = if (i < prog.length) {
+      prog(i) match {
+        //case Branch(rs, target) => TODO
+        case _ => super.execute(i, s)
+      }
+    }
+  }
+
   abstract class DslDriverX[A:Manifest,B:Manifest] extends DslDriverC[A,B] { q =>
     override val codegen = new DslGenC {
       val IR: q.type = q
@@ -126,6 +135,14 @@ class InterpCcTest extends TutorialFunSuite {
       def snippet(s: Rep[stateT]): Rep[Unit] = call(0, s)
     }
     check("2", snippet.code)
+  }
+
+    test("interp 2s") {
+    val snippet = new DslDriverX[stateT,Unit] with InterpCcSpeculative {
+      override val prog =  Vector(Branch(0, 3), Load(1, 0, 0), Load(2, 4, 1))
+      def snippet(s: Rep[stateT]): Rep[Unit] = call(0, s)
+    }
+    check("2s", snippet.code)
   }
 
 }
