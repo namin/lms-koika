@@ -29,8 +29,8 @@ class InterpCcTest extends TutorialFunSuite {
     abstract sealed class Instruction
     case class Add(rd: Int, rs1: Int, rs2: Int) extends Instruction
     case class Branch(rs: Int, target: Int) extends Instruction
-    case class Load(rd: Int, i: Int, rs: Int) extends Instruction
-    case class Store(rd: Int, i: Int, rs: Int) extends Instruction
+    case class Load(rd: Int, im: Int, rs: Int) extends Instruction
+    case class Store(rd: Int, im: Int, rs: Int) extends Instruction
 
     val prog: Vector[Instruction]
 
@@ -61,12 +61,12 @@ class InterpCcTest extends TutorialFunSuite {
             call(i+1, s)
           }
         }
-        case Load(rd, i, rs) => {
-          set_state_reg(s, rd, state_mem(s, i+state_reg(s, rs)))
+        case Load(rd, im, rs) => {
+          set_state_reg(s, rd, state_mem(s, im+state_reg(s, rs)))
           call(i+1, s)
         }
-        case Store(rd, i, rs) => {
-          set_state_mem(s, i+state_reg(s, rs), state_reg(s, rd))
+        case Store(rd, im, rs) => {
+          set_state_mem(s, im+state_reg(s, rs), state_reg(s, rd))
           call(i+1, s)
         }
       }
@@ -118,6 +118,14 @@ class InterpCcTest extends TutorialFunSuite {
       def snippet(s: Rep[stateT]): Rep[Unit] = call(0, s)
     }
     check("1", snippet.code)
+  }
+
+  test("interp 2") {
+    val snippet = new DslDriverX[stateT,Unit] with InterpCc {
+      override val prog =  Vector(Branch(0, 3), Load(1, 0, 0), Load(2, 4, 1))
+      def snippet(s: Rep[stateT]): Rep[Unit] = call(0, s)
+    }
+    check("2", snippet.code)
   }
 
 }
