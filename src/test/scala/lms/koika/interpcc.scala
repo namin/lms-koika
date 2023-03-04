@@ -15,7 +15,7 @@ class InterpCcTest extends TutorialFunSuite {
     super.check(label, code, suffix)
 
   type stateT = Array[Int]
-  trait InterpCc extends Dsl with lms.thirdparty.CLibs {
+  trait InterpCc extends Dsl {
     val MEM = 4
     def state_reg(s: Rep[stateT], i: Rep[Int]): Rep[Int] =
       s(i)
