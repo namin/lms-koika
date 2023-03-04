@@ -15,6 +15,30 @@ class InterpCcTest extends TutorialFunSuite {
     super.check(label, code, suffix)
 
   type stateT = Array[Int]
+  trait InterpCcCache extends InterpCc {
+    val CACHE_KEY = 4
+    val CACHE_VAL = 5
+    override val MEM = 10
+    def state_cache_key(s: Rep[stateT]): Rep[Int] =
+      s(CACHE_KEY)
+    def state_cache_val(s: Rep[stateT]): Rep[Int] =
+      s(CACHE_VAL)
+    def set_state_cache(s: Rep[stateT], key: Rep[Int], v: Rep[Int]) = {
+      s(CACHE_KEY) = key
+      s(CACHE_VAL) = v
+    }
+    override def state_mem(s: Rep[stateT], i: Rep[Int]): Rep[Int] = {
+      val key = i+MEM
+      if (state_cache_key(s) == key) {
+        state_cache_val(s)
+      } else {
+        val v = s(key)
+        set_state_cache(s, key, v)
+        v
+      }
+    }
+  }
+
   trait InterpCc extends Dsl {
     val MEM = 4
     def state_reg(s: Rep[stateT], i: Rep[Int]): Rep[Int] =
