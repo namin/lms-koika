@@ -16,14 +16,21 @@ class InterpCcTest extends TutorialFunSuite {
 
   type stateT = Array[Int]
   trait InterpCc extends Dsl with lms.thirdparty.CLibs {
+    val MEM = 4
     def state_reg(s: Rep[stateT], i: Rep[Int]): Rep[Int] =
       s(i)
     def set_state_reg(s: Rep[stateT], i: Rep[Int], v: Rep[Int]): Rep[Unit] =
       s(i) = v
+    def state_mem(s: Rep[stateT], i: Rep[Int]): Rep[Int] =
+      s(i+MEM)
+    def set_state_mem(s: Rep[stateT], i: Rep[Int], v: Rep[Int]): Rep[Unit] =
+      s(i+MEM) = v
 
     abstract sealed class Instruction
     case class Add(rd: Int, rs1: Int, rs2: Int) extends Instruction
     case class Branch(rs: Int, target: Int) extends Instruction
+    case class Load(rd: Int, i: Int, rs: Int) extends Instruction
+    case class Store(rd: Int, i: Int, rs: Int) extends Instruction
 
     val prog: Vector[Instruction] = Vector(Add(0, 0, 0), Branch(0, 0))
 
@@ -53,6 +60,14 @@ class InterpCcTest extends TutorialFunSuite {
           } else {
             call(i+1, s)
           }
+        }
+        case Load(rd, i, rs) => {
+          set_state_reg(s, rd, state_mem(s, i+state_reg(s, rs)))
+          call(i+1, s)
+        }
+        case Store(rd, i, rs) => {
+          set_state_mem(s, i+state_reg(s, rs), state_reg(s, rd))
+          call(i+1, s)
         }
       }
     }
