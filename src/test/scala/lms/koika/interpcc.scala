@@ -36,16 +36,23 @@ class InterpCcTest extends TutorialFunSuite {
 
     lazy val cache: Array[Option[Rep[stateT => Unit]]] = (for (p <- prog) yield None).toArray
 
-    def call(i: Int, s: Rep[stateT]): Rep[Unit] = if (i < cache.length) {
-      val f = cache(i) match {
-        case None => {
-          val f = topFun { (s: Rep[stateT]) => execute(i, s) }
-          cache(i) = Some(f)
-          f
+    def useCache: Boolean = true
+    def call(i: Int, s: Rep[stateT]): Rep[Unit] = if (useCache) {
+      if (i < cache.length) {
+        val f = cache(i) match {
+          case None => {
+            val f = topFun { (s: Rep[stateT]) => execute(i, s) }
+            cache(i) = Some(f)
+            f
+          }
+          case Some(f) => f
         }
-        case Some(f) => f
+        f(s)
+      } else {
+        unit(())
       }
-      f(s)
+    } else {
+      execute(i, s)
     }
 
     def execute(i: Int, s: Rep[stateT]): Rep[Unit] = if (i < prog.length) {
@@ -74,10 +81,39 @@ class InterpCcTest extends TutorialFunSuite {
   }
 
   trait InterpCcSpeculative extends InterpCc {
-    override def execute(i: Int, s: Rep[stateT]): Rep[Unit] = if (i < prog.length) {
-      prog(i) match {
-        //case Branch(rs, target) => TODO
-        case _ => super.execute(i, s)
+    var inBranch: Option[Branch] = None
+    override def useCache: Boolean = inBranch == None
+    override def execute(i: Int, s: Rep[stateT]): Rep[Unit] = inBranch match {
+      case None => {
+        if (i < prog.length) {
+          prog(i) match {
+            case Branch(rs, target) => {
+              inBranch = Some(Branch(rs, target))
+              call(i+1, s)
+            }
+            case _ => super.execute(i, s)
+          }
+        }
+      }
+      case Some(Branch(rs, target)) => {
+        if (i == target) {
+          inBranch = None
+        }
+        if (i < prog.length) {
+          prog(i) match {
+            case Load(rd, im, r) if rd != rs => {
+              super.execute(i, s)
+            }
+            case _ => {
+              inBranch = None
+              if (state_reg(s, rs) == unit(0)) {
+                call(target, s)
+              } else {
+                super.execute(i, s)
+              }
+            }
+          }
+        }
       }
     }
   }
