@@ -32,9 +32,9 @@ class InterpCcTest extends TutorialFunSuite {
     case class Load(rd: Int, i: Int, rs: Int) extends Instruction
     case class Store(rd: Int, i: Int, rs: Int) extends Instruction
 
-    val prog: Vector[Instruction] = Vector(Add(0, 0, 0), Branch(0, 0))
+    val prog: Vector[Instruction]
 
-    val cache: Array[Option[Rep[stateT => Unit]]] = (for (p <- prog) yield None).toArray
+    lazy val cache: Array[Option[Rep[stateT => Unit]]] = (for (p <- prog) yield None).toArray
 
     def call(i: Int, s: Rep[stateT]): Rep[Unit] = if (i < cache.length) {
       val f = cache(i) match {
@@ -114,6 +114,7 @@ class InterpCcTest extends TutorialFunSuite {
 
   test("interp 1") {
     val snippet = new DslDriverX[stateT,Unit] with InterpCc {
+      override val prog =  Vector(Add(0, 0, 0), Branch(0, 0))
       def snippet(s: Rep[stateT]): Rep[Unit] = call(0, s)
     }
     check("1", snippet.code)
