@@ -28,6 +28,5 @@ int main(int argc, char *argv[]) {
     printf("usage: %s <arg>\n", argv[0]);
     return 0;
   }
-  Snippet();
   return 0;
 }

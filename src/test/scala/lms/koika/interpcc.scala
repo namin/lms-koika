@@ -90,8 +90,9 @@ class InterpCcTest extends TutorialFunSuite {
     |    printf("usage: %s <arg>\n", argv[0]);
     |    return 0;
     |  }""".stripMargin)
-        if (initStream.size > 0) emitln("if (init()) return 0;")
-        emitln(s"  $name(${convert("argv[1]", m1)});\n  return 0;\n}")
+        //if (initStream.size > 0) emitln("if (init()) return 0;")
+        //emitln(s"  $name(${convert("argv[1]", m1)});\n");
+        emitln(s"  return 0;\n}")
       }
     }
   }
