@@ -189,6 +189,14 @@ class InterpCcTest extends TutorialFunSuite {
     check("1", snippet.code)
   }
 
+  test("interp 1s") {
+    val snippet = new DslDriverX[stateT,Unit] with InterpCcSpeculative {
+      override val prog =  Vector(Add(0, 0, 0), Branch(0, 0))
+      def snippet(s: Rep[stateT]): Rep[Unit] = call(0, s)
+    }
+    check("1", snippet.code)
+  }
+
   test("interp 2") {
     val snippet = new DslDriverX[stateT,Unit] with InterpCc {
       override val prog =  Vector(Branch(0, 3), Load(1, 0, 0), Load(2, 4, 1))
