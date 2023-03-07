@@ -23,7 +23,7 @@ class InterpCcTest extends TutorialFunSuite {
       s(CACHE_KEY)
     def state_cache_val(s: Rep[stateT]): Rep[Int] =
       s(CACHE_VAL)
-    def set_state_cache(s: Rep[stateT], key: Rep[Int], v: Rep[Int]) = {
+    def set_state_cache(s: Rep[stateT], key: Rep[Int], v: Rep[Int]): Rep[Unit] = {
       s(CACHE_KEY) = key
       s(CACHE_VAL) = v
     }
@@ -142,6 +142,23 @@ class InterpCcTest extends TutorialFunSuite {
     }
   }
 
+  trait InterpCcTimed extends InterpCcSpeculative with InterpCcCache {
+    val TIME = 6
+    def tick(s: Rep[stateT]): Rep[Unit] =
+      s(TIME) += 1
+
+    override def set_state_cache(s: Rep[stateT], key: Rep[Int], v: Rep[Int]) = {
+      tick(s)
+      tick(s)
+      super.set_state_cache(s, key, v)
+    }
+
+    override def execute(i: Int, s: Rep[stateT]): Rep[Unit] = {
+      tick(s)
+      super.execute(i, s)
+    }
+  }
+
   abstract class DslDriverX[A:Manifest,B:Manifest] extends DslDriverC[A,B] { q =>
     override val codegen = new DslGenC {
       val IR: q.type = q
@@ -219,6 +236,14 @@ class InterpCcTest extends TutorialFunSuite {
       def snippet(s: Rep[stateT]): Rep[Unit] = call(0, s)
     }
     check("2sc", snippet.code)
+  }
+
+  test("interp 2sct") {
+    val snippet = new DslDriverX[stateT,Unit] with InterpCcTimed {
+      override val prog =  Vector(Branch(0, 3), Load(1, 0, 0), Load(2, 4, 1))
+      def snippet(s: Rep[stateT]): Rep[Unit] = call(0, s)
+    }
+    check("2sct", snippet.code)
   }
 
 }
