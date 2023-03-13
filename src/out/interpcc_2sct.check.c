@@ -38,10 +38,20 @@ void Snippet(int* x0) {
 /*****************************************
 End of C Generated Code
 *******************************************/
-int main(int argc, char *argv[]) {
-  if (argc != 2) {
-    printf("usage: %s <arg>\n", argv[0]);
-    return 0;
+int init(int* s) {
+  for (int i=0; i<100; i++) {
+    s[i] = 0;
   }
+  return 0;
+}
+int main(int argc, char *argv[]) {
+  int s1[100];
+  init(s1);
+  s1[10]=nondet_uint();
+  int s2[100];
+  init(s2);
+  Snippet(s1);
+  Snippet(s2);
+  __CPROVER_assert(s1[6]==s2[6], "timing leak");
   return 0;
 }

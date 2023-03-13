@@ -160,6 +160,16 @@ class InterpCcTest extends TutorialFunSuite {
   }
 
   abstract class DslDriverX[A:Manifest,B:Manifest] extends DslDriverC[A,B] { q =>
+    val main: String = """
+int main(int argc, char *argv[]) {
+  if (argc != 2) {
+    printf("usage: %s <arg>\n", argv[0]);
+    return 0;
+  }
+  return 0;
+}
+"""
+
     override val codegen = new DslGenC {
       val IR: q.type = q
 
@@ -186,14 +196,8 @@ class InterpCcTest extends TutorialFunSuite {
     |/*****************************************
     |End of C Generated Code
     |*******************************************/
-    |int main(int argc, char *argv[]) {
-    |  if (argc != 2) {
-    |    printf("usage: %s <arg>\n", argv[0]);
-    |    return 0;
-    |  }""".stripMargin)
-        //if (initStream.size > 0) emitln("if (init()) return 0;")
-        //emitln(s"  $name(${convert("argv[1]", m1)});\n");
-        emitln(s"  return 0;\n}")
+    |""".stripMargin)
+        emit(main)
       }
     }
   }
@@ -240,6 +244,25 @@ class InterpCcTest extends TutorialFunSuite {
 
   test("interp 2sct") {
     val snippet = new DslDriverX[stateT,Unit] with InterpCcTimed {
+      override val main = """
+int init(int* s) {
+  for (int i=0; i<100; i++) {
+    s[i] = 0;
+  }
+  return 0;
+}
+int main(int argc, char *argv[]) {
+  int s1[100];
+  init(s1);
+  s1[10]=nondet_uint();
+  int s2[100];
+  init(s2);
+  Snippet(s1);
+  Snippet(s2);
+  __CPROVER_assert(s1[6]==s2[6], "timing leak");
+  return 0;
+}
+"""
       override val prog =  Vector(Branch(0, 3), Load(1, 0, 0), Load(2, 4, 1))
       def snippet(s: Rep[stateT]): Rep[Unit] = call(0, s)
     }
