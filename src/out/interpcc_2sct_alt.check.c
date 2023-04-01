@@ -57,12 +57,13 @@ int bounded(int low, int high) {
 int main(int argc, char *argv[]) {
   int s1[100];
   init(s1);
-  s1[0] = bounded(0, 20);
+  int x = bounded(0, 20);
+  s1[0] = x;
   int i = bounded(0, 20);
   s1[i] = 1;
   int s2[100];
   init(s2);
-  s2[0] = 5;
+  s2[0] = x;
   Snippet(s1);
   Snippet(s2);
   __CPROVER_assert(s1[6]==s2[6], "timing leak");
