@@ -59,7 +59,7 @@ int main(int argc, char *argv[]) {
   init(s1);
   int x = bounded(0, 20);
   s1[0] = x;
-  int i = bounded(0, 20);
+  int i = 10+bounded(0, 20);
   s1[i] = 1;
   int s2[100];
   init(s2);
