@@ -44,11 +44,20 @@ int init(int* s) {
   }
   return 0;
 }
+int bounded(int low, int high) {
+  int x = nondet_uint();
+  if (x < low) {
+    x = low;
+  }
+  if (x > high) {
+    x = high;
+  }
+  return x;
+}
 int main(int argc, char *argv[]) {
   int s1[100];
   init(s1);
-  //s1[10]=nondet_uint();
-  s1[0] = 5;
+  s1[0] = bounded(5, 6);
   s1[15] = 1;
   int s2[100];
   init(s2);
