@@ -57,8 +57,9 @@ int bounded(int low, int high) {
 int main(int argc, char *argv[]) {
   int s1[100];
   init(s1);
-  s1[0] = bounded(5, 6);
-  s1[15] = 1;
+  s1[0] = bounded(0, 20);
+  int i = bounded(0, 20);
+  s1[i] = 1;
   int s2[100];
   init(s2);
   s2[0] = 5;
