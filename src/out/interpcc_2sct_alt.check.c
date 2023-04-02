@@ -54,7 +54,7 @@ int bounded(int low, int high) {
   }
   return x;
 }
-int main(int argc, char *argv[]) {
+int main(int argc, char* argv[]) {
   int s1[100];
   init(s1);
   int x = bounded(0, 20);

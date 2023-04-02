@@ -44,10 +44,9 @@ int init(int* s) {
   }
   return 0;
 }
-int main(int argc, char *argv[]) {
+int main(int argc, char* argv[]) {
   int s1[100];
   init(s1);
-  //s1[10]=nondet_uint();
   s1[0] = 5;
   s1[15] = 1;
   int s2[100];

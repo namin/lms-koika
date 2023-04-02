@@ -251,10 +251,9 @@ int init(int* s) {
   }
   return 0;
 }
-int main(int argc, char *argv[]) {
+int main(int argc, char* argv[]) {
   int s1[100];
   init(s1);
-  //s1[10]=nondet_uint();
   s1[0] = 5;
   s1[15] = 1;
   int s2[100];
@@ -270,6 +269,47 @@ int main(int argc, char *argv[]) {
       def snippet(s: Rep[stateT]): Rep[Unit] = call(0, s)
     }
     check("2sct", snippet.code)
+  }
+
+  test("interp 2sct alt") {
+    val snippet = new DslDriverX[stateT,Unit] with InterpCcTimed {
+      override val main = """
+int init(int* s) {
+  for (int i=0; i<100; i++) {
+    s[i] = 0;
+  }
+  return 0;
+}
+int bounded(int low, int high) {
+  int x = nondet_uint();
+  if (x < low) {
+    x = low;
+  }
+  if (x > high) {
+    x = high;
+  }
+  return x;
+}
+int main(int argc, char* argv[]) {
+  int s1[100];
+  init(s1);
+  int x = bounded(0, 20);
+  s1[0] = x;
+  int i = 10+bounded(0, 20);
+  s1[i] = 1;
+  int s2[100];
+  init(s2);
+  s2[0] = x;
+  Snippet(s1);
+  Snippet(s2);
+  __CPROVER_assert(s1[6]==s2[6], "timing leak");
+  return 0;
+}
+"""
+      override val prog =  Vector(Branch(0, 3), Load(1, 0, 0), Load(2, 4, 1))
+      def snippet(s: Rep[stateT]): Rep[Unit] = call(0, s)
+    }
+    check("2sct_alt", snippet.code)
   }
 
 }
