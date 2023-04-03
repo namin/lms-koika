@@ -271,8 +271,7 @@ int main(int argc, char* argv[]) {
     check("2sct", snippet.code)
   }
 
-  test("interp 2sct alt") {
-    val snippet = new DslDriverX[stateT,Unit] with InterpCcTimed {
+  trait TimedDriver extends DslDriverX[stateT,Unit] with InterpCcTimed {
       override val main = """
 int init(int* s) {
   for (int i=0; i<100; i++) {
@@ -306,6 +305,10 @@ int main(int argc, char* argv[]) {
   return 0;
 }
 """
+  }
+
+  test("interp 2sct alt") {
+    val snippet = new TimedDriver {
       override val prog =  Vector(Branch(0, 3), Load(1, 0, 0), Load(2, 4, 1))
       def snippet(s: Rep[stateT]): Rep[Unit] = call(0, s)
     }
