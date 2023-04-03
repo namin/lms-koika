@@ -305,14 +305,21 @@ int main(int argc, char* argv[]) {
   return 0;
 }
 """
+
+    def snippet(s: Rep[stateT]): Rep[Unit] = call(0, s)
   }
 
   test("interp 2sct alt") {
     val snippet = new TimedDriver {
       override val prog =  Vector(Branch(0, 3), Load(1, 0, 0), Load(2, 4, 1))
-      def snippet(s: Rep[stateT]): Rep[Unit] = call(0, s)
     }
     check("2sct_alt", snippet.code)
   }
 
+  test("interp 3sct alt") {
+    val snippet = new TimedDriver {
+      override val prog =  Vector(Branch(0, 3), Load(1, 0, 0), Load(2, 0, 0))
+    }
+    check("3sct_alt", snippet.code)
+  }
 }
