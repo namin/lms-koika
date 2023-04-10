@@ -322,4 +322,58 @@ int main(int argc, char* argv[]) {
     }
     check("3sct_alt", snippet.code)
   }
+
+  trait TimedNiDriver extends TimedDriver {
+      override val main = """
+int init(int* s) {
+  for (int i=0; i<100; i++) {
+    s[i] = 0;
+  }
+  return 0;
+}
+int bounded(int low, int high) {
+  int x = nondet_uint();
+  if (x < low) {
+    x = low;
+  }
+  if (x > high) {
+    x = high;
+  }
+  return x;
+}
+int main(int argc, char* argv[]) {
+  int s1[100];
+  init(s1);
+  int s2[100];
+  init(s2);
+  int x = bounded(0, 20);
+  s1[0] = x;
+  s2[0] = x;
+  int i;
+  for (i=0; i<20; i++) {
+    s1[i+10] = bounded(0, 20);
+    s2[i+10] = bounded(0, 20);
+  }
+  Snippet(s1);
+  Snippet(s2);
+  __CPROVER_assert(s1[6]==s2[6], "timing leak");
+  return 0;
+}
+"""
+  }
+
+  test("interp 2sct ni") {
+    val snippet = new TimedNiDriver {
+      override val prog =  Vector(Branch(0, 3), Load(1, 0, 0), Load(2, 4, 1))
+    }
+    check("2sct_ni", snippet.code)
+  }
+
+  test("interp 3sct ni") {
+    val snippet = new TimedNiDriver {
+      override val prog =  Vector(Branch(0, 3), Load(1, 0, 0), Load(2, 0, 0))
+    }
+    check("3sct_ni", snippet.code)
+  }
+
 }
