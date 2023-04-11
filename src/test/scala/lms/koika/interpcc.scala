@@ -254,10 +254,10 @@ int init(int* s) {
 int main(int argc, char* argv[]) {
   int s1[100];
   init(s1);
-  s1[0] = 5;
-  s1[15] = 1;
   int s2[100];
   init(s2);
+  s1[0] = 5;
+  s1[15] = 1;
   s2[0] = 5;
   Snippet(s1);
   Snippet(s2);
@@ -292,12 +292,12 @@ int bounded(int low, int high) {
 int main(int argc, char* argv[]) {
   int s1[100];
   init(s1);
+  int s2[100];
+  init(s2);
   int x = bounded(0, 20);
   s1[0] = x;
   int i = 10+bounded(0, 20);
   s1[i] = 1;
-  int s2[100];
-  init(s2);
   s2[0] = x;
   Snippet(s1);
   Snippet(s2);

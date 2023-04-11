@@ -47,10 +47,10 @@ int init(int* s) {
 int main(int argc, char* argv[]) {
   int s1[100];
   init(s1);
-  s1[0] = 5;
-  s1[15] = 1;
   int s2[100];
   init(s2);
+  s1[0] = 5;
+  s1[15] = 1;
   s2[0] = 5;
   Snippet(s1);
   Snippet(s2);
