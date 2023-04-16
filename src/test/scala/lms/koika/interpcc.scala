@@ -434,7 +434,6 @@ int main(int argc, char* argv[]) {
     check("3sctr_ni", snippet.code)
   }
 
-  // TODO: need to actually remove speculation
   test("interp 2ct ni") {
     val snippet = new TimedNiDriver {
       override val prog =  Vector(Load(1, 0, 0), Load(2, 4, 1))
