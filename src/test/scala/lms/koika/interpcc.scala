@@ -105,6 +105,9 @@ class InterpCcTest extends TutorialFunSuite {
   }
 
   trait InterpCcSpeculative extends InterpCc {
+    def saveForRollback(s: Rep[stateT], x: Instruction): Rep[Unit] = {}
+    def rollback(s: Rep[stateT]): Rep[Unit] = {}
+    def resetSaved(): Unit = {}
     var inBranch: Option[Branch] = None
     override def useCache: Boolean = inBranch == None
     override def execute(i: Int, s: Rep[stateT]): Rep[Unit] = inBranch match {
@@ -122,24 +125,51 @@ class InterpCcTest extends TutorialFunSuite {
       case Some(Branch(rs, target)) => {
         if (i == target) {
           inBranch = None
+          if (state_reg(s, rs) == unit(0)) {
+            rollback(s)
+          }
+          resetSaved()
         }
         if (i < prog.length) {
           prog(i) match {
             case Load(rd, im, r) if rd != rs => {
+              saveForRollback(s, Load(rd, im, r))
               super.execute(i, s)
             }
             case _ => {
               inBranch = None
               if (state_reg(s, rs) == unit(0)) {
+                rollback(s)
                 call(target, s)
               } else {
                 super.execute(i, s)
               }
+              resetSaved(); unit(())
             }
           }
         }
       }
     }
+  }
+  
+  trait InterpCcRollback extends InterpCcSpeculative {
+    val SAVED_OFFSET = 7
+    val savedRegisters = scala.collection.mutable.Set[Int]()
+    override def saveForRollback(s: Rep[stateT], x: Instruction): Rep[Unit] = x match {
+      case Load(rd, _, _) => {
+        if (!savedRegisters.contains(rd)) {
+          set_state_reg(s, rd+SAVED_OFFSET, state_reg(s, rd))
+          savedRegisters += rd
+          unit(())
+        }
+      }
+    }
+    override def rollback(s: Rep[stateT]): Rep[Unit] = {
+      for (rd <- savedRegisters) {
+        set_state_reg(s, rd, state_reg(s, rd+SAVED_OFFSET))
+      }
+    }
+    override def resetSaved(): Unit = { savedRegisters.clear() }
   }
 
   trait InterpCcTimed extends InterpCcSpeculative with InterpCcCache {
@@ -374,6 +404,20 @@ int main(int argc, char* argv[]) {
       override val prog =  Vector(Branch(0, 3), Load(1, 0, 0), Load(2, 0, 0))
     }
     check("3sct_ni", snippet.code)
+  }
+
+  test("interp 2sctr ni") {
+    val snippet = new TimedNiDriver with InterpCcRollback {
+      override val prog =  Vector(Branch(0, 3), Load(1, 0, 0), Load(2, 4, 1))
+    }
+    check("2sctr_ni", snippet.code)
+  }
+
+  test("interp 3sctr ni") {
+    val snippet = new TimedNiDriver with InterpCcRollback {
+      override val prog =  Vector(Branch(0, 3), Load(1, 0, 0), Load(2, 0, 0))
+    }
+    check("3sctr_ni", snippet.code)
   }
 
 }
