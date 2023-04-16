@@ -353,6 +353,20 @@ int main(int argc, char* argv[]) {
     check("3sct_alt", snippet.code)
   }
 
+  test("interp 2ct alt") {
+    val snippet = new TimedDriver {
+      override val prog =  Vector(Load(1, 0, 0), Load(2, 4, 1))
+    }
+    check("2ct_alt", snippet.code)
+  }
+
+  test("interp 3ct alt") {
+    val snippet = new TimedDriver {
+      override val prog =  Vector(Load(1, 0, 0), Load(2, 0, 0))
+    }
+    check("3ct_alt", snippet.code)
+  }
+
   trait TimedNiDriver extends TimedDriver {
       override val main = """
 int init(int* s) {
@@ -418,6 +432,21 @@ int main(int argc, char* argv[]) {
       override val prog =  Vector(Branch(0, 3), Load(1, 0, 0), Load(2, 0, 0))
     }
     check("3sctr_ni", snippet.code)
+  }
+
+  // TODO: need to actually remove speculation
+  test("interp 2ct ni") {
+    val snippet = new TimedNiDriver {
+      override val prog =  Vector(Load(1, 0, 0), Load(2, 4, 1))
+    }
+    check("2ct_ni", snippet.code)
+  }
+
+  test("interp 3ct ni") {
+    val snippet = new TimedNiDriver {
+      override val prog =  Vector(Load(1, 0, 0), Load(2, 0, 0))
+    }
+    check("3ct_ni", snippet.code)
   }
 
 }
