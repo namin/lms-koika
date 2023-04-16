@@ -172,7 +172,7 @@ class InterpCcTest extends TutorialFunSuite {
     override def resetSaved(): Unit = { savedRegisters.clear() }
   }
 
-  trait InterpCcTimed extends InterpCcCache {
+  trait InterpCcTimed extends InterpCcSpeculative with InterpCcCache {
     val TIME = 6
     def tick(s: Rep[stateT]): Rep[Unit] =
       s(TIME) += 1
@@ -273,7 +273,7 @@ int main(int argc, char *argv[]) {
   }
 
   test("interp 2sct") {
-    val snippet = new DslDriverX[stateT,Unit] with InterpCcSpeculative with InterpCcTimed {
+    val snippet = new DslDriverX[stateT,Unit] with InterpCcTimed {
       override val main = """
 int init(int* s) {
   for (int i=0; i<100; i++) {
@@ -340,28 +340,28 @@ int main(int argc, char* argv[]) {
   }
 
   test("interp 2sct alt") {
-    val snippet = new DslDriverX[stateT,Unit] with InterpCcSpeculative with TimedDriver {
+    val snippet = new TimedDriver {
       override val prog =  Vector(Branch(0, 3), Load(1, 0, 0), Load(2, 4, 1))
     }
     check("2sct_alt", snippet.code)
   }
 
   test("interp 3sct alt") {
-    val snippet = new DslDriverX[stateT,Unit] with InterpCcSpeculative with TimedDriver {
+    val snippet = new TimedDriver {
       override val prog =  Vector(Branch(0, 3), Load(1, 0, 0), Load(2, 0, 0))
     }
     check("3sct_alt", snippet.code)
   }
 
   test("interp 2ct alt") {
-    val snippet = new DslDriverX[stateT,Unit] with InterpCcSpeculative with TimedDriver {
+    val snippet = new TimedDriver {
       override val prog =  Vector(Load(1, 0, 0), Load(2, 4, 1))
     }
     check("2ct_alt", snippet.code)
   }
 
   test("interp 3ct alt") {
-    val snippet = new DslDriverX[stateT,Unit] with InterpCcSpeculative with TimedDriver {
+    val snippet = new TimedDriver {
       override val prog =  Vector(Load(1, 0, 0), Load(2, 0, 0))
     }
     check("3ct_alt", snippet.code)
@@ -407,33 +407,34 @@ int main(int argc, char* argv[]) {
   }
 
   test("interp 2sct ni") {
-    val snippet = new DslDriverX[stateT,Unit] with InterpCcSpeculative with TimedNiDriver {
+    val snippet = new TimedNiDriver {
       override val prog =  Vector(Branch(0, 3), Load(1, 0, 0), Load(2, 4, 1))
     }
     check("2sct_ni", snippet.code)
   }
 
   test("interp 3sct ni") {
-    val snippet = new DslDriverX[stateT,Unit] with InterpCcSpeculative with TimedNiDriver {
+    val snippet = new TimedNiDriver {
       override val prog =  Vector(Branch(0, 3), Load(1, 0, 0), Load(2, 0, 0))
     }
     check("3sct_ni", snippet.code)
   }
 
   test("interp 2sctr ni") {
-    val snippet = new DslDriverX[stateT,Unit] with InterpCcSpeculative with InterpCcRollback with TimedNiDriver {
+    val snippet = new TimedNiDriver with InterpCcRollback {
       override val prog =  Vector(Branch(0, 3), Load(1, 0, 0), Load(2, 4, 1))
     }
     check("2sctr_ni", snippet.code)
   }
 
   test("interp 3sctr ni") {
-    val snippet = new DslDriverX[stateT,Unit] with InterpCcSpeculative with InterpCcRollback with TimedNiDriver {
+    val snippet = new TimedNiDriver with InterpCcRollback {
       override val prog =  Vector(Branch(0, 3), Load(1, 0, 0), Load(2, 0, 0))
     }
     check("3sctr_ni", snippet.code)
   }
 
+  // TODO: need to actually remove speculation
   test("interp 2ct ni") {
     val snippet = new TimedNiDriver {
       override val prog =  Vector(Load(1, 0, 0), Load(2, 4, 1))
