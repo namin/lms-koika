@@ -37,6 +37,11 @@ class InterpCcTest extends TutorialFunSuite {
         v
       }
     }
+    override def set_state_mem(s: Rep[stateT], i: Rep[Int], v: Rep[Int]): Rep[Unit] = {
+      val key = i+MEM
+      s(key) = v
+      set_state_cache(s, key, v)
+    }
   }
 
   trait InterpCc extends Dsl {
