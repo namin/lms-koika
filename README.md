@@ -19,6 +19,6 @@ The [`rewrite` method of `GraphBuilderOpt` in the LMS Backend](https://github.co
 
 The [`GraphBuilderOpt` is linked through the `Adapter` object in the LMS Frontend](https://github.com/TiarkRompf/lms-clean/blob/master/src/main/scala/lms/core/stub.scala#L22). Because the linking is through an object as opposed to a trait, it's not easy to change -- so for now, we will experiment with more optimizations by changing LMS Clean directly.
 
-# [Bounded Model Checking](https://www.cprover.org/cbmc/)
+# [Bounded Model Checking](https://www.cprover.org/cbmc/) (also see [newer releases](https://github.com/diffblue/cbmc) and [doc](http://www.cprover.org/cprover-manual/))
 - cd `src/out`
 - `cbmc --compact-trace interpcc_2sct_alt.check.c`
