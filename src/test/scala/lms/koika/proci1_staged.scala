@@ -15,6 +15,11 @@ package lms.koika
 // Execute: executes the instruction and produces a value to be committed.
 //
 // Commit: commits the value to the register file.
+import lms.core.stub._
+import lms.core.virtualize
+import lms.macros.SourceContext
+
+@virtualize
 class StagedProcInterpPC extends TutorialFunSuite {
 // Models a single cycle cache
 trait cache {
@@ -87,16 +92,17 @@ class MagicMem extends cache {
   case class Store(rs1: Reg, rs2: Reg, imm: Int) extends Instruction // *(rs2 + imm) = rs1
   case class Exit() extends Instruction
 
+  trait Interp extends Dsl {
   type Program = List[Instruction]
-  type RegFile = Array[Int]
+  type RegFile = Array[Rep[Int]]
   type PC = Int
   type F2E = (PC, Instruction)
   type E2C =
-    (PC, Option[Reg], Int, PC, Boolean) // (PC, rd, value, nextPC, finished)
+    (PC, Option[Reg], Rep[Int], PC, Boolean) // (PC, rd, value, nextPC, finished)
 
   type State = (RegFile, PC, Option[F2E], Option[E2C])
 
-  var regfile: RegFile = Array(0, 0, 0, 0, 0, 0, 0)
+  var regfile: RegFile = List(0, 0, 0, 0, 0, 0, 0).map(unit(_)).toArray
   var pc: PC = 0 // pc register used by the fetch stage
   var f2e: Option[F2E] =
     None //  fetch to execute stage, read by the execute stage
@@ -106,7 +112,7 @@ class MagicMem extends cache {
 
   def log(): Unit = {
     if (DEBUG) {
-      val str: String = s"regfile: ${this.regfile.mkString(",")}\n" +
+      val str: String = //s"regfile: ${this.regfile.mkString(",")}\n" +
         s"PC: ${this.pc}\n" +
         s"f2e: ${this.f2e}\n" +
         s"e2c: ${this.e2c}\n"
@@ -270,6 +276,7 @@ class MagicMem extends cache {
     this.f2e = f2e
     this.e2c = e2c
     dCache.reset
+  }
   }
 
   // compare run_stages with run on a given program
