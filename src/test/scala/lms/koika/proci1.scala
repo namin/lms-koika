@@ -1,26 +1,91 @@
 package lms.koika
 
 // TODO: use something better than an Exit instruction
-// TODO: use better alternative than this.pc = -1 at the start of the program
+
+
+// Models a single cycle cache
+trait cache {
+  type Heap = Array[Int]
+  var heap: Heap =
+    Array(0)
+
+  def available: Boolean
+  def read(addr: Int): Unit
+  def write(addr: Int, value: Int): Unit
+  def output: Option[Int]
+
+  def get_heap: Heap
+  def reset: Unit
+}
+
+class MagicMem extends cache {
+  var toReturn: Option[Int] = None
+
+  def available: Boolean = true
+
+  def read(addr: Int): Unit = {
+    toReturn = Some(heap(addr))
+  }
+
+  def write(addr: Int, value: Int): Unit = {
+    heap(addr) = value
+  }
+
+  def output: Option[Int] = toReturn
+
+  def reset: Unit = {
+    heap = Array.fill(10)(0)
+    toReturn = None
+  }
+
+  def get_heap: Heap = heap
+
+}
+
+
+// Interpreter for a 3-stage pipelined processor
+// Fetch, Execute, Commit
 //
+// Each stage is modeled as a function that modies the state of the processor class.
+// All three stages are orchestrated by the run_stages function.
 //
-// TODO: (hard) add load/store instructions
+// Fetch: fetches the next instruction - Right now, it just copies the instruction from the program.
+//        After the inclusion of iCache, it will read from the iCache.
+//
+// Execute: executes the instruction and produces a value to be committed.
+//
+// Commit: commits the value to the register file.
 class ProcInterpPC extends TutorialFunSuite {
   val under = "proci1_"
 
-  val DEBUG = true
+  val DEBUG = false 
   val MAX_STEPS = 1000
-  val NOP = Addi(0, 0, 0)
+  
+  case class Reg(id: Int)
 
-  type Reg = Int
-  type Heap = Array[Int]
+  // transform Reg to Int implicitly
+  implicit def reg2int(reg: Reg): Int = reg.id
+
+
+  val dCache: cache = new MagicMem
+
+  val ZERO: Reg = Reg(0)
+  val A0: Reg = Reg(1)
+  val A1: Reg = Reg(2)
+  val A2: Reg = Reg(3)
+  val A3: Reg = Reg(4)
+  val A4: Reg = Reg(5)
+  val A5: Reg = Reg(6)
+
+  val NOP = Addi(ZERO, ZERO, 0)
+
 
   abstract sealed class Instruction
   case class Add(rd: Reg, rs1: Reg, rs2: Reg) extends Instruction
   case class Addi(rd: Reg, rs1: Reg, imm: Int) extends Instruction
   case class BrNEZ(rs: Reg, imm: Int) extends Instruction
   case class Load(rd: Reg, rs1: Reg, imm: Int) extends Instruction
-  case class Store(rs1: Reg, rs2: Reg, imm: Int) extends Instruction
+  case class Store(rs1: Reg, rs2: Reg, imm: Int) extends Instruction // *(rs2 + imm) = rs1
   case class Exit() extends Instruction
 
   type Program = List[Instruction]
@@ -28,26 +93,25 @@ class ProcInterpPC extends TutorialFunSuite {
   type PC = Int
   type F2E = (PC, Instruction)
   type E2C =
-    (PC, Option[Reg], Int, PC, Boolean) // (PC, rd, value, nextPC, break)
+    (PC, Option[Reg], Int, PC, Boolean) // (PC, rd, value, nextPC, finished)
 
-  type State = (Heap, RegFile, PC, Option[F2E], Option[E2C])
+  type State = (RegFile, PC, Option[F2E], Option[E2C])
 
   var regfile: RegFile = Array(0, 0, 0, 0, 0, 0, 0)
-  var pc: PC = -1 // pc register used by the fetch stage
+  var pc: PC = 0 // pc register used by the fetch stage
   var f2e: Option[F2E] =
     None //  fetch to execute stage, read by the execute stage
   var e2c: Option[E2C] =
     None // execute to commit stage, read by the commit stage
   var prog: Program = List(NOP)
-  var heap: Heap = Array(0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
 
   def log(): Unit = {
     if (DEBUG) {
-      val str = s"regfile: ${this.regfile.mkString(",")}\n" +
+      val str: String = s"regfile: ${this.regfile.mkString(",")}\n" +
         s"PC: ${this.pc}\n" +
         s"f2e: ${this.f2e}\n" +
-        s"e2c: ${this.e2c}\n" +
-        s"\nheap: ${this.heap.mkString(",")}\n"
+        s"e2c: ${this.e2c}\n"
+
       println(str)
     }
   }
@@ -75,24 +139,25 @@ class ProcInterpPC extends TutorialFunSuite {
       instr match {
         case Add(rd, rs1, rs2) =>
           (fpc, Some(rd), this.regfile(rs1) + this.regfile(rs2), fpc + 1, false)
-        
+
         case Addi(rd, rs1, imm) =>
           (fpc, Some(rd), this.regfile(rs1) + imm, fpc + 1, false)
-        
+
         case BrNEZ(rs, imm) =>
           val nextPC = if (this.regfile(rs) != 0) fpc + imm else fpc + 1
           (fpc, None, 0, nextPC, false)
-        
+
         case Load(rd, rs1, imm) =>
-          (fpc, Some(rd), this.heap(this.regfile(rs1) + imm), fpc + 1, false)
-        
+          dCache.read(this.regfile(rs1) + imm)
+          (fpc, Some(rd), dCache.output.get, fpc + 1, false)
+
         case Store(rs1, rs2, imm) =>
-          this.heap(this.regfile(rs1) + imm) = this.regfile(rs2)
+          dCache.write(this.regfile(rs2) + imm, this.regfile(rs1))
           (fpc, None, 0, fpc + 1, false)
-        
+
         case Exit() =>
           (fpc, None, 0, fpc + 1, true)
-        
+
         case _ =>
           println(s"unknown instruction: ${instr}")
           assert(false)
@@ -102,13 +167,12 @@ class ProcInterpPC extends TutorialFunSuite {
   }
 
   // updates regfile
+  // returns true if the program is done
   def commit(): Boolean = {
     this.e2c match {
       case Some(e2c_) =>
         val (fpc, rd, value, nextPC, break) = e2c_
-        rd map { (rd_) =>
-          this.regfile(rd_) = value
-        }
+        rd map (regfile(_) = value)
         break
       case None => false
     }
@@ -118,9 +182,13 @@ class ProcInterpPC extends TutorialFunSuite {
     var cnt = 0
     var continue = true
     while (cnt < MAX_STEPS && continue) {
+
+      // driver for the three stages
       var break = commit()
       this.e2c = exec()
       this.f2e = fetch()
+
+      // Revert in the case of misprediction
       this.e2c map { (e2c_) =>
         this.f2e map { (f2e_) =>
           val (fpc, _) = f2e_
@@ -146,6 +214,7 @@ class ProcInterpPC extends TutorialFunSuite {
     this.regfile
   }
 
+  // A single cycle implementation for debugging
   def run(): RegFile = {
     var cnt = 0
     while (this.pc < prog.length && cnt < MAX_STEPS) {
@@ -163,11 +232,12 @@ class ProcInterpPC extends TutorialFunSuite {
           (if (this.regfile(rs) != 0) (pc + target) else pc + 1)
 
         case Load(rd, rs, offset) =>
-          this.regfile(rd) = this.heap(this.regfile(rs) + offset)
+          dCache.read(this.regfile(rs) + offset)
+          this.regfile(rd) = dCache.output.get
           pc + 1
 
         case Store(rs1, rs2, offset) =>
-          this.heap(this.regfile(rs1) + offset) = this.regfile(rs2)
+          dCache.write(this.regfile(rs2) + offset, this.regfile(rs1))
           pc + 1
 
         case Exit() => prog.length
@@ -176,16 +246,18 @@ class ProcInterpPC extends TutorialFunSuite {
           assert(false)
           pc + 1
       }
-      log()
       cnt += 1
     }
     this.regfile
   }
 
+  def get_heap(): Array[Int] = {
+    dCache.get_heap
+  }
+
   def init(
       prog: Program,
       state: State = (
-        Array(0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
         Array(0, 0, 0, 0, 0, 0, 0),
         0,
         None,
@@ -193,11 +265,12 @@ class ProcInterpPC extends TutorialFunSuite {
       )
   ): Unit = {
     this.prog = prog
-    this.heap = state._1
-    this.regfile = state._2
-    this.pc = state._3
-    this.f2e = state._4
-    this.e2c = state._5
+    val (regfile, pc, f2e, e2c) = state
+    this.regfile = regfile
+    this.pc = pc
+    this.f2e = f2e
+    this.e2c = e2c
+    dCache.reset
   }
 
   // compare run_stages with run on a given program
@@ -206,20 +279,23 @@ class ProcInterpPC extends TutorialFunSuite {
   // Used to test the correctness of the run_stages method
   private def check(prog: Program) = {
     init(prog)
-    val res = run()
+    val res = run().clone()
+    val res_heap = get_heap().clone()
     init(prog)
-    val res_stages = run_stages()
+    val res_stages = run_stages().clone()
+    val res_stages_heap = get_heap().clone()
     assert(res === res_stages)
+    assert(res_heap === res_stages_heap)
   }
 
   test("proc 1 run") {
     val initRegFile = Array(0, 0, 1, 0, 15, -1)
-    val N = 4
-    val Temp = 3
-    val F_n = 2
-    val F_n_1 = 1
-    val Zero = 0
-    val MinusOne = 5
+    val N = A3
+    val Temp = A2
+    val F_n = A1
+    val F_n_1 = A0
+    val Zero = ZERO
+    val MinusOne = A4
     val Fibprog = List(
       Add(Temp, F_n, F_n_1),
       Add(F_n_1, F_n, Zero),
@@ -231,24 +307,23 @@ class ProcInterpPC extends TutorialFunSuite {
 
     init(
       Fibprog,
-      (Array(0), initRegFile, 0, None, None)
+      (initRegFile, 0, None, None)
     )
 
     val res = run()
     val expected = Array(0, 610, 987, 987, 0, -1)
 
     assert(res === expected)
-
   }
 
   test("proc 1 run stages") {
     val initRegFile = Array(0, 0, 1, 0, 15, -1)
-    val N = 4
-    val Temp = 3
-    val F_n = 2
-    val F_n_1 = 1
-    val Zero = 0
-    val MinusOne = 5
+    val N = A3
+    val Temp = A2
+    val F_n = A1
+    val F_n_1 = A0
+    val Zero = ZERO
+    val MinusOne = A4
     val Fibprog = List(
       Add(Temp, F_n, F_n_1),
       Add(F_n_1, F_n, Zero),
@@ -260,22 +335,22 @@ class ProcInterpPC extends TutorialFunSuite {
 
     init(
       Fibprog,
-      (Array(0), initRegFile, 0, None, None)
+      (initRegFile, 0, None, None)
     )
 
     val res = run_stages()
 
     val expected = Array(0, 610, 987, 987, 0, -1)
     assert(res === expected)
-
   }
+
   // tests addi
   test("proc 2 compare") {
-    val N = 4
-    val Temp = 3
-    val F_n = 2
-    val F_n_1 = 1
-    val Zero = 0
+    val N = A3
+    val Temp = A2
+    val F_n = A1
+    val F_n_1 = A0
+    val Zero = ZERO
 
     val Fibprog = List(
       Addi(F_n, Zero, 1),
@@ -297,13 +372,12 @@ class ProcInterpPC extends TutorialFunSuite {
     assert(res === expected)
 
     check(Fibprog)
-
   }
 
   // tests early exit
   test("proc 3 compare") {
-    val A = 1
-    val B = 2
+    val A = A0
+    val B = A1
     val EarlyExit = List(
       Addi(A, A, 1),
       Addi(B, B, 1),
@@ -324,16 +398,17 @@ class ProcInterpPC extends TutorialFunSuite {
 
   // tests branching
   test("proc 4 compare") {
-    val N = 0
+    val N = ZERO
 
     val FibTri = List(
-      Addi(5, 5, 1),
+      Addi(A4, A4, 1),
       Addi(N, N, 4),
-      Add(1, 1, 2),
-      Add(2, 2, 3),
-      Add(3, 3, 4),
-      Add(4, 4, 5),
-      Add(5, 5, 6),
+      Add(A0, A0, A1),
+      Add(A1, A1, A2),
+      Add(A2, A2, A3),
+      Add(A3, A3, A4),
+      Add(A4, A4, A5),
+
       Addi(N, N, -1),
       BrNEZ(N, -6),
       Exit()
@@ -350,32 +425,35 @@ class ProcInterpPC extends TutorialFunSuite {
 
   // tests load and store
   test("proc 5 compare") {
-    val testHeap = List(
-      Load(1, 0, 0),
-      Load(2, 1, 0),
-      Load(3, 2, 0),
-      Load(4, 3, 0),
-      Load(5, 4, 0),
-      Addi(1, 1, 2),
-      Addi(2, 2, 3),
-      Addi(3, 3, 4),
-      Addi(4, 4, 5),
-      Addi(5, 5, 6),
-      Store(1, 0, 0),
-      Store(2, 1, 0),
-      Store(3, 2, 0),
-      Store(4, 3, 0),
-      Store(5, 4, 0),
+
+    val addr: Reg = A3
+    val N: Reg = A4
+
+    val FibOnHeap = List(
+      Addi(N, N, 8),
+      Addi(A5, ZERO, 1),
+      Store(A5, ZERO, 1),
+      Addi(addr, ZERO, 0),
+      NOP,
+      NOP,
+      Load(A0, addr, 0),
+      Load(A1, addr, 1),
+      Add(A2, A0, A1),
+      Store(A2, addr, 2),
+      Addi(addr, addr, 1),
+      Addi(N, N, -1),
+      BrNEZ(N, -6),
       Exit()
     )
 
-    init(testHeap)
+    init(FibOnHeap)
     val res = run()
-    val expected = Array(0, 2, 3, 4, 5, 6, 0)
+    val expected = Array(0, 13, 21, 34, 8, 0, 1)
+    val expected_heap = Array(0, 1, 1, 2, 3, 5, 8, 13, 21, 34)
+
+    assert(get_heap() === expected_heap)
 
     assert(res === expected)
-
-    check(testHeap)
   }
 
 }
