@@ -5,8 +5,8 @@ import lms.core.virtualize
 import lms.macros.SourceContext
 
 @virtualize
-class InterpCcTest extends TutorialFunSuite {
-  val under = "interpcc_"
+class InterpCdTest extends TutorialFunSuite {
+  val under = "interpcd_"
 
   override def exec(label: String, code: String, suffix: String = "c") =
     super.exec(label, code, suffix)
@@ -15,7 +15,7 @@ class InterpCcTest extends TutorialFunSuite {
     super.check(label, code, suffix)
 
   type stateT = Array[Int]
-  trait InterpCcCache extends InterpCc {
+  trait InterpCdCache extends InterpCd {
     val CACHE_KEY = 4
     val CACHE_VAL = 5
     override val MEM = 10
@@ -44,7 +44,7 @@ class InterpCcTest extends TutorialFunSuite {
     }
   }
 
-  trait InterpCc extends Dsl {
+  trait InterpCd extends Dsl {
     val MEM = 4
     def state_reg(s: Rep[stateT], i: Rep[Int]): Rep[Int] =
       s(i)
@@ -109,75 +109,7 @@ class InterpCcTest extends TutorialFunSuite {
     }
   }
 
-  trait InterpCcSpeculative extends InterpCc {
-    def saveForRollback(s: Rep[stateT], x: Instruction): Rep[Unit] = {}
-    def rollback(s: Rep[stateT]): Rep[Unit] = {}
-    def resetSaved(): Unit = {}
-    var inBranch: Option[Branch] = None
-    override def useCache: Boolean = inBranch == None
-    override def execute(i: Int, s: Rep[stateT]): Rep[Unit] = inBranch match {
-      case None => {
-        if (i < prog.length) {
-          prog(i) match {
-            case Branch(rs, target) if target > i => {
-              inBranch = Some(Branch(rs, target))
-              call(i+1, s)
-            }
-            case _ => super.execute(i, s)
-          }
-        }
-      }
-      case Some(Branch(rs, target)) => {
-        if (i == target) {
-          inBranch = None
-          if (state_reg(s, rs) == unit(0)) {
-            rollback(s)
-          }
-          resetSaved()
-        }
-        if (i < prog.length) {
-          prog(i) match {
-            case Load(rd, im, r) if rd != rs => {
-              saveForRollback(s, Load(rd, im, r))
-              super.execute(i, s)
-            }
-            case _ => {
-              inBranch = None
-              if (state_reg(s, rs) == unit(0)) {
-                rollback(s)
-                call(target, s)
-              } else {
-                super.execute(i, s)
-              }
-              resetSaved(); unit(())
-            }
-          }
-        }
-      }
-    }
-  }
-  
-  trait InterpCcRollback extends InterpCcSpeculative {
-    val SAVED_OFFSET = 7
-    val savedRegisters = scala.collection.mutable.Set[Int]()
-    override def saveForRollback(s: Rep[stateT], x: Instruction): Rep[Unit] = x match {
-      case Load(rd, _, _) => {
-        if (!savedRegisters.contains(rd)) {
-          set_state_reg(s, rd+SAVED_OFFSET, state_reg(s, rd))
-          savedRegisters += rd
-          unit(())
-        }
-      }
-    }
-    override def rollback(s: Rep[stateT]): Rep[Unit] = {
-      for (rd <- savedRegisters) {
-        set_state_reg(s, rd, state_reg(s, rd+SAVED_OFFSET))
-      }
-    }
-    override def resetSaved(): Unit = { savedRegisters.clear() }
-  }
-
-  trait InterpCcTimed extends InterpCcSpeculative with InterpCcCache {
+  trait InterpCdTimed extends InterpCd with InterpCdCache {
     val TIME = 6
     def tick(s: Rep[stateT]): Rep[Unit] =
       s(TIME) += 1
@@ -238,15 +170,7 @@ int main(int argc, char *argv[]) {
   }
 
   test("interp 1") {
-    val snippet = new DslDriverX[stateT,Unit] with InterpCc {
-      override val prog =  Vector(Add(0, 0, 0), Branch(0, 0))
-      def snippet(s: Rep[stateT]): Rep[Unit] = call(0, s)
-    }
-    check("1", snippet.code)
-  }
-
-  test("interp 1s") {
-    val snippet = new DslDriverX[stateT,Unit] with InterpCcSpeculative {
+    val snippet = new DslDriverX[stateT,Unit] with InterpCd {
       override val prog =  Vector(Add(0, 0, 0), Branch(0, 0))
       def snippet(s: Rep[stateT]): Rep[Unit] = call(0, s)
     }
@@ -254,31 +178,23 @@ int main(int argc, char *argv[]) {
   }
 
   test("interp 2") {
-    val snippet = new DslDriverX[stateT,Unit] with InterpCc {
-      override val prog =  Vector(Branch(0, 3), Load(1, 0, 0), Load(2, 4, 1))
+    val snippet = new DslDriverX[stateT,Unit] with InterpCd {
+      override val prog =  Vector(Load(1, 0, 0), Load(2, 4, 1))
       def snippet(s: Rep[stateT]): Rep[Unit] = call(0, s)
     }
     check("2", snippet.code)
   }
 
-    test("interp 2s") {
-    val snippet = new DslDriverX[stateT,Unit] with InterpCcSpeculative {
-      override val prog =  Vector(Branch(0, 3), Load(1, 0, 0), Load(2, 4, 1))
-      def snippet(s: Rep[stateT]): Rep[Unit] = call(0, s)
-    }
-    check("2s", snippet.code)
-  }
-
-  test("interp 2sc") {
-    val snippet = new DslDriverX[stateT,Unit] with InterpCcSpeculative with InterpCcCache {
-      override val prog =  Vector(Branch(0, 3), Load(1, 0, 0), Load(2, 4, 1))
+  test("interp 2c") {
+    val snippet = new DslDriverX[stateT,Unit] with InterpCd with InterpCdCache {
+      override val prog =  Vector(Load(1, 0, 0), Load(2, 4, 1))
       def snippet(s: Rep[stateT]): Rep[Unit] = call(0, s)
     }
     check("2sc", snippet.code)
   }
 
-  test("interp 2sct") {
-    val snippet = new DslDriverX[stateT,Unit] with InterpCcTimed {
+  test("interp 2ct") {
+    val snippet = new DslDriverX[stateT,Unit] with InterpCdTimed {
       override val main = """
 int init(int* s) {
   for (int i=0; i<100; i++) {
@@ -300,13 +216,13 @@ int main(int argc, char* argv[]) {
   return 0;
 }
 """
-      override val prog =  Vector(Branch(0, 3), Load(1, 0, 0), Load(2, 4, 1))
+      override val prog =  Vector(Load(1, 0, 0), Load(2, 4, 1))
       def snippet(s: Rep[stateT]): Rep[Unit] = call(0, s)
     }
     check("2sct", snippet.code)
   }
 
-  trait TimedDriver extends DslDriverX[stateT,Unit] with InterpCcTimed {
+  trait TimedDriver extends DslDriverX[stateT,Unit] with InterpCdTimed {
       override val main = """
 int init(int* s) {
   for (int i=0; i<100; i++) {
@@ -342,20 +258,6 @@ int main(int argc, char* argv[]) {
 """
 
     def snippet(s: Rep[stateT]): Rep[Unit] = call(0, s)
-  }
-
-  test("interp 2sct alt") {
-    val snippet = new TimedDriver {
-      override val prog =  Vector(Branch(0, 3), Load(1, 0, 0), Load(2, 4, 1))
-    }
-    check("2sct_alt", snippet.code)
-  }
-
-  test("interp 3sct alt") {
-    val snippet = new TimedDriver {
-      override val prog =  Vector(Branch(0, 3), Load(1, 0, 0), Load(2, 0, 0))
-    }
-    check("3sct_alt", snippet.code)
   }
 
   test("interp 2ct alt") {
@@ -411,34 +313,6 @@ int main(int argc, char* argv[]) {
 """
   }
 
-  test("interp 2sct ni") {
-    val snippet = new TimedNiDriver {
-      override val prog =  Vector(Branch(0, 3), Load(1, 0, 0), Load(2, 4, 1))
-    }
-    check("2sct_ni", snippet.code)
-  }
-
-  test("interp 3sct ni") {
-    val snippet = new TimedNiDriver {
-      override val prog =  Vector(Branch(0, 3), Load(1, 0, 0), Load(2, 0, 0))
-    }
-    check("3sct_ni", snippet.code)
-  }
-
-  test("interp 2sctr ni") {
-    val snippet = new TimedNiDriver with InterpCcRollback {
-      override val prog =  Vector(Branch(0, 3), Load(1, 0, 0), Load(2, 4, 1))
-    }
-    check("2sctr_ni", snippet.code)
-  }
-
-  test("interp 3sctr ni") {
-    val snippet = new TimedNiDriver with InterpCcRollback {
-      override val prog =  Vector(Branch(0, 3), Load(1, 0, 0), Load(2, 0, 0))
-    }
-    check("3sctr_ni", snippet.code)
-  }
-
   test("interp 2ct ni") {
     val snippet = new TimedNiDriver {
       override val prog =  Vector(Load(1, 0, 0), Load(2, 4, 1))
@@ -452,5 +326,4 @@ int main(int argc, char* argv[]) {
     }
     check("3ct_ni", snippet.code)
   }
-
 }
