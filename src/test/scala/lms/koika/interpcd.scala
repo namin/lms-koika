@@ -63,51 +63,39 @@ class InterpCdTest extends TutorialFunSuite {
 
     val prog: Vector[Instruction]
 
-    lazy val cache: Array[Option[Rep[stateT => Unit]]] = (for (p <- prog) yield None).toArray
-
-    def useCache: Boolean = true
-    def call(i: Int, s: Rep[stateT]): Rep[Unit] = if (useCache) {
-      if (i < cache.length) {
-        val f = cache(i) match {
-          case None => {
-            val f = topFun { (s: Rep[stateT]) => execute(i, s) }
-            cache(i) = Some(f)
-            f
+    def call(pc: Rep[Int], s: Rep[stateT]): Rep[Unit] = {
+      while (0 <= pc && pc < prog.length) {
+        for (i <- (0 until prog.length): Range) {
+          if (i == pc) {
+            execute(i, s)
           }
-          case Some(f) => f
         }
-        f(s)
-      } else {
-        unit(())
       }
-    } else {
-      execute(i, s)
     }
 
-    def execute(i: Int, s: Rep[stateT]): Rep[Unit] = if (i < prog.length) {
+    def execute(i: Int, s: Rep[stateT]): Rep[Int] =
       prog(i) match {
         case Add(rd, rs1, rs2) => {
           set_state_reg(s, rd, state_reg(s, rs1) + state_reg(s, rs2))
-          call(i+1, s)
+          i+1
         }
         case Branch(rs, target) => {
           if (state_reg(s, rs) == unit(0)) {
-            call(target, s)
+            target
           } else {
-            call(i+1, s)
+            i+1
           }
         }
         case Load(rd, im, rs) => {
           set_state_reg(s, rd, state_mem(s, im+state_reg(s, rs)))
-          call(i+1, s)
+          i+1
         }
         case Store(rd, im, rs) => {
           set_state_mem(s, im+state_reg(s, rs), state_reg(s, rd))
-          call(i+1, s)
+          i+1
         }
       }
     }
-  }
 
   trait InterpCdTimed extends InterpCd with InterpCdCache {
     val TIME = 6
@@ -120,7 +108,7 @@ class InterpCdTest extends TutorialFunSuite {
       super.set_state_cache(s, key, v)
     }
 
-    override def execute(i: Int, s: Rep[stateT]): Rep[Unit] = {
+    override def execute(i: Int, s: Rep[stateT]): Rep[Int] = {
       tick(s)
       super.execute(i, s)
     }
