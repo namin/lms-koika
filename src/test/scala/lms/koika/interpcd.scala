@@ -179,7 +179,7 @@ int main(int argc, char *argv[]) {
       override val prog =  Vector(Load(1, 0, 0), Load(2, 4, 1))
       def snippet(s: Rep[stateT]): Rep[Unit] = call(0, s)
     }
-    check("2sc", snippet.code)
+    check("2c", snippet.code)
   }
 
   test("interp 2ct") {
@@ -208,7 +208,7 @@ int main(int argc, char* argv[]) {
       override val prog =  Vector(Load(1, 0, 0), Load(2, 4, 1))
       def snippet(s: Rep[stateT]): Rep[Unit] = call(0, s)
     }
-    check("2sct", snippet.code)
+    check("2ct", snippet.code)
   }
 
   trait TimedDriver extends DslDriverX[stateT,Unit] with InterpCdTimed {
