@@ -63,11 +63,12 @@ class InterpCdTest extends TutorialFunSuite {
 
     val prog: Vector[Instruction]
 
-    def call(pc: Rep[Int], s: Rep[stateT]): Rep[Unit] = {
-      while (0 <= pc && pc < prog.length) {
+    def call(init: Rep[Int], s: Rep[stateT]): Rep[Unit] = {
+      var pc = init
+      while (unit(0) <= pc && pc < unit(prog.length)) {
         for (i <- (0 until prog.length): Range) {
           if (i == pc) {
-            execute(i, s)
+            pc = execute(i, s)
           }
         }
       }
