@@ -1,8 +1,14 @@
 /*****************************************
 Emitting Generated Code
 *******************************************/
-class Snippet() extends (Int => Int) {
-  def apply(x0: Int): Int = 1
+class Snippet() extends (Array[Int] => Int) {
+  def apply(x0: Array[Int]): Int = {
+    x0(3) = x0(2) + x0(1)
+    x0(1) = x0(2) + x0(0)
+    x0(2) = x0(3) + x0(0)
+    x0(4) = x0(4) + x0(5)
+    x0(2)
+  }
 }
 /*****************************************
 End of Generated Code

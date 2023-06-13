@@ -19,14 +19,14 @@ class StagedProcInterpPC extends TutorialFunSuite {
 
   trait Interp extends Dsl {
     type Program = List[Instruction]
-    type RegFile = Array[Rep[Int]]
+    type RegFile = Rep[Array[Int]]
     type PC = Int
 
     type State = (RegFile, PC)
 
     def println(s: String) = if (DEBUG) Predef.println(s) else ()
 
-    var regfile: RegFile = List(0, 0, 0, 0, 0, 0, 0).map(unit(_)).toArray
+    var regfile: RegFile = unit(List(0, 0, 0, 0, 0, 0, 0).toArray)
     var pc: PC = 0
     var prog: Program = List(Add(0, 0, 0))
 
@@ -52,19 +52,19 @@ class StagedProcInterpPC extends TutorialFunSuite {
 
     def init(
         prog: Program,
-        state: (List[Int], Int) = (List(0, 0, 0, 0, 0, 0, 0), 0)
+        state: (RegFile, Int)
     ): Unit = {
       this.prog = prog
-      this.regfile = state._1.map(unit(_)).toArray
+      this.regfile = state._1
       this.pc = state._2
     }
 
   }
   test("proc 1") {
-    val snippet = new DslDriver[Int, Int] with Interp {
-      def snippet(x: Rep[Int]) = {
+    val snippet = new DslDriver[Array[Int], Int] with Interp {
+      def snippet(initRegFile: RegFile) = {
 
-        val initRegFile = List(0, 0, 1, 0, 15, -1)
+        //val initRegFile = List(0, 0, 1, 0, 15, -1)
         val N = 4
         val Temp = 3
         val F_n = 2
