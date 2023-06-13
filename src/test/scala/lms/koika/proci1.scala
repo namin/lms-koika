@@ -3,7 +3,7 @@ package lms.koika
 class ProcInterpPC extends TutorialFunSuite {
   val under = "proci1_"
 
-  val DEBUG = true
+  val DEBUG = false 
 
   type Reg = Int
 
