@@ -59,6 +59,7 @@ class ProcInterpPC extends TutorialFunSuite {
   val under = "proci1_"
 
   val DEBUG = false 
+
   val MAX_STEPS = 1000
   
   case class Reg(id: Int)
@@ -78,7 +79,6 @@ class ProcInterpPC extends TutorialFunSuite {
   val A5: Reg = Reg(6)
 
   val NOP = Addi(ZERO, ZERO, 0)
-
 
   abstract sealed class Instruction
   case class Add(rd: Reg, rs1: Reg, rs2: Reg) extends Instruction
