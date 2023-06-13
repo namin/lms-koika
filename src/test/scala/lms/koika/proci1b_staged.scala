@@ -30,9 +30,9 @@ class StagedProcInterp1bPC extends TutorialFunSuite {
       prog: Program,
       state: (RegFile, PC)): RegFile = {
       var regfile: RegFile = state._1
-      var pc: PC = state._2
+      var pc: Var[Int] = __newVar(state._2)
 
-      while (0 <= pc && pc < prog.length) {
+      while (0 <= readVar(pc) && pc < prog.length) {
         for (i <- (0 until prog.length): Range) {
           if (i == pc) {
             prog(i) match {
@@ -70,8 +70,8 @@ class StagedProcInterp1bPC extends TutorialFunSuite {
           Add(Temp, F_n, F_n_1),
           Add(F_n_1, F_n, Zero),
           Add(F_n, Temp, Zero),
-          Add(N, N, MinusOne)
-          // BrNEZ(N, -4)
+          Add(N, N, MinusOne),
+          BrNEZ(N, -4)
         )
 
         val res = run(Fibprog, (initRegFile, 0))
