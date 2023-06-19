@@ -1,2 +1,7 @@
 *~
 \#*\#
+headers/
+project/
+target/
+timing.log
+timingInv.log
