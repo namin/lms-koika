@@ -8,6 +8,12 @@ import lms.macros.SourceContext
 class StagedProcInterp1bPC extends TutorialFunSuite {
   val under = "proci1b_staged_"
 
+  override def exec(label: String, code: String, suffix: String = "c") =
+    super.exec(label, code, suffix)
+
+  override def check(label: String, code: String, suffix: String = "c") =
+    super.check(label, code, suffix)
+
   val DEBUG = true
 
   type Reg = Int
@@ -55,8 +61,51 @@ class StagedProcInterp1bPC extends TutorialFunSuite {
     }
   }
 
+  abstract class DslDriverX[A:Manifest,B:Manifest] extends DslDriverC[A,B] { q =>
+    val main: String = ""
+
+    override val codegen = new DslGenC {
+      val IR: q.type = q
+
+      override def emitAll(g: lms.core.Graph, name: String)(m1:Manifest[_],m2:Manifest[_]): Unit = {
+        val ng = init(g)
+        val efs = "" //quoteEff(g.block.ein)
+        val stt = dce.statics.toList.map(quoteStatic).mkString(", ")
+        prepareHeaders
+        emitln("""
+    |/*****************************************
+    |Emitting C Generated Code
+    |*******************************************/
+    """.stripMargin)
+        val src = run(name, ng)
+        emitDefines(stream)
+        emitHeaders(stream)
+        emitFunctionDecls(stream)
+        emitDatastructures(stream)
+        emitFunctions(stream)
+        emitInit(stream)
+        emitln(s"\n/**************** $name ****************/")
+        emit(src)
+        emitln("""
+    |/*****************************************
+    |End of C Generated Code
+    |*******************************************/
+    |""".stripMargin)
+        emit(main)
+      }
+    }
+  }
+
   test("proc 1") {
-    val snippet = new DslDriver[Array[Int], Int] with Interp {
+    val snippet = new DslDriverX[Array[Int], Int] with Interp {
+      override val main = """
+int main(int argc, char *argv[]) {
+  int regfile[6] = {0, 0, 1, 0, 15, -1};
+  int r = Snippet(regfile);
+  printf("%d\n", r);
+  return 0;
+}
+"""
       def snippet(initRegFile: RegFile) = {
 
         //val initRegFile = List(0, 0, 1, 0, 15, -1)
