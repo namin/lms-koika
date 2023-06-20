@@ -35,7 +35,7 @@ class StagedProcInterp1bPC extends TutorialFunSuite {
     def run(
       prog: Program,
       state: (RegFile, PC)): RegFile = {
-      var regfile: RegFile = state._1
+      val regfile: RegFile = state._1
       var pc: Var[Int] = __newVar(state._2)
 
       while (0 <= readVar(pc) && pc < prog.length) {
