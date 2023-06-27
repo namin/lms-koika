@@ -254,7 +254,7 @@ int main(int argc, char *argv[]) {
   test("proc stress") {
     // read from file 1.asm and get the program
     val snippet = new DslDriverX[Array[Int], Array[Int]] with Interp {
-      val filename = "./1.asm"
+      val filename = "src/out/1.asm"
       val program = readProgram(filename)
       val expected: Array[Int] = expectedResult(program)
       override val main = constructMain(expected)
