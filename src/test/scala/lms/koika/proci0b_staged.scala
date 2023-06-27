@@ -56,27 +56,25 @@ int main(int argc, char *argv[]) {
 
     def println(s: String) = if (DEBUG) Predef.println(s) else ()
 
+
     def run(prog: Program, state: Rep[State]): Rep[RegFile] = {
       val regfile: Rep[RegFile] = state
-      val id_to_prog: List[(String, Program)] = prog
-        .filter {
-          case BrTarget(id) => true
-          case _            => false
-        }
-        .map {
-          case BrTarget(id) => (id, prog.dropWhile(_ != BrTarget(id)).tail)
-          case _            => ("", List())
-        }
+      var id_to_prog: Map[String, Program] = Map[String, Program]()
+      prog.foreach {
+        case BrTarget(id) =>
+          id_to_prog += (id -> prog.dropWhile(_ != BrTarget(id)).tail)
+        case _ => ()
+      }
 
       var curblock: Rep[String] = "entry" //
-      var curidx: Rep[Int] = id_to_prog.indexWhere(_._1 == "entry") //
-      val endidx: Int = id_to_prog.indexWhere(_._1 == "exit")
+      // var curidx: Rep[Int] = id_to_prog.indexWhere(_._1 == "entry") //
+      // val endidx: Int = id_to_prog.indexWhere(_._1 == "exit")
       var curprog: Program = prog
-
-      while (curblock != "exit") {
-        for (i <- (0 until id_to_prog.length): Range) {
-          if (i == curidx) {
-            val (id, curprog) = id_to_prog(i)
+      var endprog: Rep[Boolean] = false
+      while (!endprog) {
+        for (block <- id_to_prog.keys) {
+          if (block == curblock) {
+            curprog = id_to_prog(block)
             println(s"curblock at start ${curblock}")
             println(s"curprog: $curprog")
 
@@ -100,7 +98,7 @@ int main(int argc, char *argv[]) {
                       curblock = target
                       break = true
                     } else {
-                      println("not returning target")
+                      println(s"not returning target $target")
                     }
 
                   case BrTarget(id) => {
@@ -113,13 +111,16 @@ int main(int argc, char *argv[]) {
             }
             println(s"curblock at end ${curblock}")
           }
+          if (curblock == "exit") {
+            endprog = true
+          }
+
         }
-        //for (i <- (0 until id_to_prog.length): Range) {
+        // for (i <- (0 until id_to_prog.length): Range) {
         //  if (id_to_prog(i)._1 == curblock) {
-            curidx = 2
-            curblock = "exit"
+        // curblock = "exit"
         //  }
-        //}
+        // }
 
       }
       regfile
