@@ -29,6 +29,12 @@ int main(int argc, char *argv[]) {
 
   trait Interp extends Dsl {
 
+    implicit class StringEqualsToOp(s1: Rep[String]) {
+      def equalsTo(s2: Rep[String]) = {
+        Wrap[Boolean](Adapter.g.reflect("String.equalsTo", Unwrap(s1), Unwrap(s2)))
+      }
+    }
+
     abstract sealed class Instruction
     case class Add(rd: Reg, rs1: Reg, rs2: Reg) extends Instruction
     case class Addi(rd: Reg, rs1: Reg, imm: Int) extends Instruction
@@ -66,14 +72,14 @@ int main(int argc, char *argv[]) {
         case _ => ()
       }
 
-      var curblock: Rep[String] = "entry" //
+      var curblock: Var[String] = __newVar("entry") //
       // var curidx: Rep[Int] = id_to_prog.indexWhere(_._1 == "entry") //
       // val endidx: Int = id_to_prog.indexWhere(_._1 == "exit")
       var curprog: Program = prog
-      var endprog: Rep[Boolean] = false
+      var endprog: Var[Boolean] = false
       while (!endprog) {
         for (block <- id_to_prog.keys) {
-          if (block == curblock) {
+          if (unit(block).equalsTo(readVar(curblock))) {
             curprog = id_to_prog(block)
             println(s"curblock at start ${curblock}")
             println(s"curprog: $curprog")
@@ -111,7 +117,7 @@ int main(int argc, char *argv[]) {
             }
             println(s"curblock at end ${curblock}")
           }
-          if (curblock == "exit") {
+          if (readVar(curblock).equalsTo(unit("exit"))) {
             endprog = true
           }
 
