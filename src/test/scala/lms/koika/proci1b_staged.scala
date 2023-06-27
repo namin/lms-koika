@@ -19,6 +19,29 @@ int main(int argc, char *argv[]) {
   return 0;
 }
 """
+
+  def constructMain(expected: Array[Int]): String = {
+    var ret = s"""
+int main(int argc, char *argv[]) {
+  int regfile[7] = {0, 0, 0, 0, 0, 0, 0};
+  Snippet(regfile);
+"""
+    for (i <- 0 until expected.length) {
+      ret += s"""
+  if (regfile[$i] != ${expected(i)}) {
+    printf("error: regfile[$i] = %d, expected ${expected(i)}\\n", regfile[$i]);
+    return 1;
+  }
+"""
+    }
+    ret += """
+  printf("OK\n");
+  return 0;
+}
+"""
+    ret
+  }
+
   override def exec(label: String, code: String, suffix: String = "c") =
     super.exec(label, code, suffix)
 
@@ -33,7 +56,6 @@ int main(int argc, char *argv[]) {
     case class Add(rd: Reg, rs1: Reg, rs2: Reg) extends Instruction
     case class Addi(rd: Reg, rs1: Reg, imm: Int) extends Instruction
     case class BrNEZ(rs: Reg, imm: Int) extends Instruction
-
 
     type Program = List[Instruction]
     type RegFile = Rep[Array[Int]]
@@ -57,25 +79,80 @@ int main(int argc, char *argv[]) {
 
     def println(s: String) = if (DEBUG) Predef.println(s) else ()
 
+    def readProgram(file: String): Program = {
+      scala.io.Source
+        .fromFile(file)
+        .getLines()
+        .map { line =>
+          val tokens = line.split(" ")
+          tokens(0) match {
+            case "add" =>
+              Add(
+                Reg(tokens(1).toInt),
+                Reg(tokens(2).toInt),
+                Reg(tokens(3).toInt)
+              )
+            case "addi" =>
+              Addi(Reg(tokens(1).toInt), Reg(tokens(2).toInt), tokens(3).toInt)
+            case "br" => BrNEZ(Reg(tokens(1).toInt), tokens(2).toInt)
+            case _    => println(s"Unknown instruction: $line"); NOP
+          }
+        }
+        .toList
+    }
+
+    def expectedResult(prog: Program): Array[Int] = {
+      var rf: Array[Int] = List(0, 0, 0, 0, 0, 0, 0).toArray
+      var i: Int = 0
+      while (i < prog.length) {
+        prog(i) match {
+          case Add(rd, rs1, rs2) => {
+            rf(rd) = rf(rs1) + rf(rs2)
+            i = i + 1
+          }
+          case Addi(rd, rs1, imm) => {
+            rf(rd) = rf(rs1) + imm
+            i = i + 1
+          }
+          case BrNEZ(rs, target) => {
+            if (rf(rs) != 0) i = i + target
+            else i = i + 1
+          }
+        }
+      }
+      rf
+
+    }
+
     def run(prog: Program, state: (RegFile, PC)): RegFile = {
       val regfile: RegFile = state._1
       var pc: Var[Int] = __newVar(state._2)
+      var e2c_dst: Var[Int] = __newVar(0)
+      var e2c_val: Var[Int] = __newVar(0)
 
       while (0 <= readVar(pc) && pc < prog.length) {
         for (i <- (0 until prog.length): Range) {
           if (i == pc) {
+            regfile(readVar(e2c_dst)) = readVar(e2c_val)
+
             prog(i) match {
-              case Add(rd, rs1, rs2) =>
-                regfile(rd) = regfile(rs1) + regfile(rs2)
+              case Add(rd, rs1, rs2) => {
+                e2c_dst = __newVar(rd.id)
+                e2c_val = __newVar(regfile(rs1) + regfile(rs2))
                 pc = pc + 1
+              }
 
-              case Addi(rd, rs1, imm) =>
-                regfile(rd) = regfile(rs1) + imm
+              case Addi(rd, rs1, imm) => {
+                e2c_dst = __newVar(rd.id)
+                e2c_val = __newVar(regfile(rs1) + imm)
                 pc = pc + 1
+              }
 
-              case BrNEZ(rs, target) =>
+              case BrNEZ(rs, target) => {
                 if (regfile(rs) != 0) pc = pc + target
                 else pc = pc + 1
+              }
+
             }
           }
         }
@@ -123,64 +200,48 @@ int main(int argc, char *argv[]) {
     }
   }
 
+
   test("proc 1") {
-    val snippet = new DslDriverX[Array[Int], Int] with Interp {
-      override val main = """
-int main(int argc, char *argv[]) {
-  int regfile[6] = {0, 0, 1, 0, 15, -1};
-  int r = Snippet(regfile);
-  printf("%d\n", r);
-  return 0;
-}
-"""
+    val snippet = new DslDriverX[Array[Int], Array[Int]] with Interp {
+      val N = A3
+      val Temp = A2
+      val F_n = A1
+      val F_n_1 = A0
+      val Fibprog = List(
+        Addi(F_n, ZERO, 1),
+        Addi(F_n_1, ZERO, 0),
+        Addi(N, ZERO, 15),
+        Addi(Temp, ZERO, 0),
+        Add(Temp, F_n, F_n_1),
+        Add(F_n_1, F_n, ZERO),
+        Add(F_n, Temp, ZERO),
+        Addi(N, N, -1),
+        BrNEZ(N, -4)
+      )
+      val expected = expectedResult(Fibprog)
+      override val main = constructMain(expected)
       def snippet(initRegFile: RegFile) = {
-        val N = A3
-        val Temp = A2
-        val F_n = A1
-        val F_n_1 = A0
-        val MinusOne = A4
 
-        val Fibprog = List(
-          Add(Temp, F_n, F_n_1),
-          Add(F_n_1, F_n, ZERO),
-          Add(F_n, Temp, ZERO),
-          Add(N, N, MinusOne),
-          BrNEZ(N, -4)
-        )
-
-        val res = run(Fibprog, (initRegFile, 0))
-        val expected = Array(0, 610, 987, 987, 0, -1)
-
-        res(F_n)
+        run(Fibprog, (initRegFile, 0))
       }
     }
     check("1", snippet.code)
   }
 
-  test("proc 2") {
+  test("proc stress") {
+    // read from file 1.asm and get the program
     val snippet = new DslDriverX[Array[Int], Array[Int]] with Interp {
-      override val main = regfile_main
+      val filename = "./1.asm"
+      val program = readProgram(filename)
+      val expected = expectedResult(program)
+      override val main = constructMain(expected)
+
       def snippet(initRegFile: RegFile) = {
-
-        val N = A3
-        val Temp = A2
-        val F_n = A1
-        val F_n_1 = A0
-        val Fibprog = List(
-          Addi(F_n, ZERO, 1),
-          Addi(F_n_1, ZERO, 0),
-          Addi(N, ZERO, 15),
-          Addi(Temp, ZERO, 0),
-          Add(Temp, F_n, F_n_1),
-          Add(F_n_1, F_n, ZERO),
-          Add(F_n, Temp, ZERO),
-          Addi(N, N, -1),
-          BrNEZ(N, -4)
-        )
-
-        run(Fibprog, (initRegFile, 0))
+        run(program, (initRegFile, 0))
       }
+
     }
-    check("2", snippet.code)
+    check("stress", snippet.code)
   }
+
 }
