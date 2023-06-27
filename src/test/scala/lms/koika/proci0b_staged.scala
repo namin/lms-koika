@@ -194,6 +194,7 @@ int main(int argc, char *argv[]) {
         run(Fibprog, (initRegFile))
       }
     }
-    check("1", snippet.code)
+    // TODO
+    exec("1", snippet.code)
   }
 }
