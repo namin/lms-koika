@@ -10,7 +10,7 @@ class StagedProcInterp1bPC extends TutorialFunSuite {
 
   val regfile_main = """
 int main(int argc, char *argv[]) {
-  int regfile[6] = {0, 0, 0, 0, 0, 0};
+  int regfile[7] = {0, 0, 0, 0, 0, 0, 0};
   Snippet(regfile);
   for (int i = 0; i < 6; i++) {
     printf("%d ", regfile[i]);
@@ -157,6 +157,7 @@ int main(int argc, char *argv[]) {
           }
         }
       }
+      regfile(readVar(e2c_dst)) = readVar(e2c_val) // let a cycle bubble through
       regfile
     }
   }
@@ -200,7 +201,6 @@ int main(int argc, char *argv[]) {
     }
   }
 
-
   test("proc 1") {
     val snippet = new DslDriverX[Array[Int], Array[Int]] with Interp {
       val N = A3
@@ -228,12 +228,35 @@ int main(int argc, char *argv[]) {
     check("1", snippet.code)
   }
 
+  test("proc hazard") {
+    val snippet = new DslDriverX[Array[Int], Array[Int]] with Interp {
+      val prog = List(
+        Addi(A0, ZERO, 1),
+        Add(A1, A0, A0), // RAW
+        Add(A2, A1, A0),
+        Add(A3, A2, A1),
+        Add(A0, A3, A2), // RAW
+        Add(A1, A0, A3), // RAW, RAR
+        Add(A2, A1, A0), // RAW, RAR
+        Add(A3, A2, A1), // RAW, RAR
+        Add(A3, A0, A3), // WAW, RAW
+      ) 
+      val expected = expectedResult(prog)
+      override val main = constructMain(expected)
+      def snippet(initRegFile: RegFile) = {
+        run(prog, (initRegFile, 0))
+      }
+    }
+    check("hazard", snippet.code)
+
+  }
+
   test("proc stress") {
     // read from file 1.asm and get the program
     val snippet = new DslDriverX[Array[Int], Array[Int]] with Interp {
       val filename = "./1.asm"
       val program = readProgram(filename)
-      val expected = expectedResult(program)
+      val expected: Array[Int] = expectedResult(program)
       override val main = constructMain(expected)
 
       def snippet(initRegFile: RegFile) = {
