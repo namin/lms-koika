@@ -133,6 +133,7 @@ int main(int argc, char *argv[]) {
       while (0 <= readVar(pc) && pc < prog.length) {
         for (i <- (0 until prog.length): Range) {
           if (i == pc) {
+            // TODO: This commit phase could be moved outside the if.
             regfile(readVar(e2c_dst)) = readVar(e2c_val)
 
             prog(i) match {
@@ -230,6 +231,9 @@ int main(int argc, char *argv[]) {
 
   test("proc hazard") {
     val snippet = new DslDriverX[Array[Int], Array[Int]] with Interp {
+      // TODO: these hazards are not really hazards, because we commit before we execute the next stage.
+      // We should consider moving the commit phase later,
+      // and then also stalling in case of a dependency.
       val prog = List(
         Addi(A0, ZERO, 1),
         Add(A1, A0, A0), // RAW
