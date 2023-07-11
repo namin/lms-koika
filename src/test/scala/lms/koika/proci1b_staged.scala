@@ -89,21 +89,28 @@ int main(int argc, char *argv[]) {
 
     type State = (RegFile, PC)
 
-    class Port {
-      var rdata: Var[Int] = __newVar(0)
-      var wdata: Var[Int] = __newVar(0)
-      def read(): Rep[Int] = rdata
-      def write(d: Rep[Int]): Rep[Unit] = {
-        wdata = d
+    class Port[T: Manifest](
+        init: T,
+        customEqual: Option[(Rep[T], Rep[T]) => Rep[Boolean]] = None
+    ) {
+
+      private var rdata: Var[T] = __newVar(init)
+      private var wdata: Var[T] = __newVar(init)
+
+      def equal(a: Rep[T], b: Rep[T]): Rep[Boolean] = customEqual match {
+        case Some(f) => f(a, b)
+        case None    => a == b
       }
-      def flush(): Rep[Unit] = {
-        wdata = 0
-      }
-      def update(): Rep[Unit] = {
-        rdata = wdata
-      }
-      def isZero(): Rep[Boolean] = read() != 0
-      def isAmong(vs: List[Rep[Int]]): Rep[Boolean] = vs.contains(read())
+
+      def read: Rep[T] = readVar(rdata)
+
+      def write(d: Rep[T]): Rep[Unit] = wdata = d
+
+      def update(): Rep[Unit] = rdata = wdata
+
+      def isZero(): Rep[Boolean] = equal(read, unit(init))
+      def isAmong(vs: List[T]): Rep[Boolean] =
+        vs.foldLeft(unit(false))((acc, v) => acc || read == unit(v))
     }
 
     def println(s: String) = if (DEBUG) Predef.println(s) else ()
@@ -152,30 +159,31 @@ int main(int argc, char *argv[]) {
 
     def run(prog: Program, state: (RegFile, PC)): RegFile = {
       val regfile: RegFile = state._1
-      var pc: Port = new Port
-      var e2c_dst: Port = new Port
-      var e2c_val: Port = new Port
+      var pc: Port[Int] = new Port[Int](0)
+      var e2c_dst: Port[Int] = new Port[Int](0)
+      var e2c_val: Port[Int] = new Port[Int](0)
 
-      while (0 <= pc.read() && pc.read() < prog.length) {
+      while (0 <= pc.read && pc.read < prog.length) {
+        pc.update() // TODO formalise why this is needed
         // Commit stage
-        regfile(e2c_dst.read()) = e2c_val.read()
+        regfile(e2c_dst.read) = e2c_val.read
         // pipeline update
-        pc.update()
         e2c_dst.update()
         e2c_val.update()
         // Execute stage
         for (i <- (0 until prog.length): Range) {
-          if (i == pc.read()) {
+          if (i == pc.read) {
             prog(i) match {
               case Add(rd, rs1, rs2) => {
                 if (
-                  !(List(rd, rs1, rs2).contains(e2c_dst.read())) ||
-                  unit(0) == e2c_dst.read()
+                  !e2c_dst
+                    .isAmong(List(rd, rs1, rs2)) || unit(0) == e2c_dst.read
                 ) {
                   e2c_dst.write(rd)
                   e2c_val.write(regfile(rs1) + regfile(rs2))
-                  pc.write(pc.read() + 1)
+                  pc.write(pc.read + 1)
                 } else {
+                  // stall
                   e2c_dst.write(0)
                   e2c_val.write(0)
                 }
@@ -183,35 +191,35 @@ int main(int argc, char *argv[]) {
 
               case Addi(rd, rs1, imm) => {
                 if (
-                  !(List(rd, rs1).contains(e2c_dst.read())) ||
-                  unit(0) == e2c_dst.read()
+                  !e2c_dst.isAmong(List(rd, rs1)) || unit(0) == e2c_dst.read
                 ) {
                   e2c_dst.write(rd)
                   e2c_val.write(regfile(rs1) + imm)
-                  pc.write(pc.read() + 1)
+                  pc.write(pc.read + 1)
                 } else {
+                  // stall
                   e2c_dst.write(0)
                   e2c_val.write(0)
                 }
               }
 
               case BrNEZ(rs, target) => {
-                if (e2c_dst.read() == rs.id) {
-                  if (e2c_val.read() == 0) {
-                    pc.write(pc.read() + 1)
+                if (e2c_dst.read != rs.id) {
+                  if (regfile(rs) == 0) {
+                    pc.write(pc.read + 1)
                   } else {
-                    pc.write(pc.read() + target)
+                    pc.write(pc.read + target)
                   }
-                  e2c_dst.write(0)
-                  e2c_val.write(0)
-                }
+                } // otherwise stall
+                e2c_dst.write(0)
+                e2c_val.write(0)
               }
             }
           }
-
         }
       }
       // let a cycle bubble through
+      regfile(e2c_dst.read) = e2c_val.read
       regfile
     }
   }
