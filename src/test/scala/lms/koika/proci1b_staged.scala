@@ -26,10 +26,25 @@ int main(int argc, char *argv[]) {
   int regfile[7] = {0, 0, 0, 0, 0, 0, 0};
   Snippet(regfile);
 """
+    var printexpected = s"""
+  printf("\\nexpected:\\n");
+  """
+    for (i <- 0 until expected.length) {
+      printexpected += s"""
+  printf("${expected(i)} ");
+"""
+    }
+
     for (i <- 0 until expected.length) {
       ret += s"""
   if (regfile[$i] != ${expected(i)}) {
     printf("error: regfile[$i] = %d, expected ${expected(i)}\\n", regfile[$i]);
+    printf("\\nRegfile:\\n");
+    for (int i = 0; i < 6; i++) {
+      printf("%d ", regfile[i]);
+    }
+    ${printexpected}
+    printf("\\n\\nFAILED\\n");
     return 1;
   }
 """
@@ -44,9 +59,6 @@ int main(int argc, char *argv[]) {
 
   override def exec(label: String, code: String, suffix: String = "c") =
     super.exec(label, code, suffix)
-
-  override def check(label: String, code: String, suffix: String = "c") =
-    super.check(label, code, suffix)
 
   val DEBUG = true
 
@@ -77,6 +89,25 @@ int main(int argc, char *argv[]) {
 
     type State = (RegFile, PC)
 
+    class Port {
+      var valid: Var[Boolean] = __newVar(false)
+      var rdata: Var[Int] = __newVar(0)
+      var wdata: Var[Int] = __newVar(0)
+      def read(): Rep[Int] = {
+        if (valid) rdata
+        else 0
+      }
+      def write(d: Rep[Int]): Rep[Unit] = {
+        wdata = d
+        valid = true
+      }
+      def flush(): Rep[Unit] = valid = false
+      def update(): Rep[Unit] = {
+        rdata = readVar(wdata)
+      }
+    }
+      
+
     def println(s: String) = if (DEBUG) Predef.println(s) else ()
 
     def readProgram(file: String): Program = {
@@ -85,17 +116,14 @@ int main(int argc, char *argv[]) {
         .getLines()
         .map { line =>
           val tokens = line.split(" ")
-          tokens(0) match {
-            case "add" =>
-              Add(
-                Reg(tokens(1).toInt),
-                Reg(tokens(2).toInt),
-                Reg(tokens(3).toInt)
-              )
-            case "addi" =>
-              Addi(Reg(tokens(1).toInt), Reg(tokens(2).toInt), tokens(3).toInt)
-            case "br" => BrNEZ(Reg(tokens(1).toInt), tokens(2).toInt)
-            case _    => println(s"Unknown instruction: $line"); NOP
+          tokens match {
+            case Array("add", rd, rs1, rs2) =>
+              Add(Reg(rd.toInt), Reg(rs1.toInt), Reg(rs2.toInt))
+            case Array("addi", rd, rs1, imm) =>
+              Addi(Reg(rd.toInt), Reg(rs1.toInt), imm.toInt)
+            case Array("br", rs, imm) =>
+              BrNEZ(Reg(rs.toInt), imm.toInt)
+            case _ => Predef.println(s"Unknown instruction: $line"); NOP
           }
         }
         .toList
@@ -126,39 +154,83 @@ int main(int argc, char *argv[]) {
 
     def run(prog: Program, state: (RegFile, PC)): RegFile = {
       val regfile: RegFile = state._1
-      var pc: Var[Int] = __newVar(state._2)
-      var e2c_dst: Var[Int] = __newVar(0)
-      var e2c_val: Var[Int] = __newVar(0)
+      var pc: Port = new Port
+      var e2c_dst_w: Var[Int] = __newVar(0)
+      var e2c_val_w: Var[Int] = __newVar(0)
+      var e2c_dst_r: Var[Int] = __newVar(0)
+      var e2c_val_r: Var[Int] = __newVar(0)
 
-      while (0 <= readVar(pc) && pc < prog.length) {
+
+      while (0 <= pc.read() && pc.read() < prog.length) {
+        pc.update()
+        // Commit stage
+        regfile(readVar(e2c_dst_r)) = readVar(e2c_val_r)
+        e2c_dst_r = e2c_dst_w
+        e2c_val_r = e2c_val_w
+        // Execute stage
         for (i <- (0 until prog.length): Range) {
-          if (i == pc) {
-            // TODO: This commit phase could be moved outside the if.
-            regfile(readVar(e2c_dst)) = readVar(e2c_val)
-
+          if (i == pc.read()) { 
             prog(i) match {
               case Add(rd, rs1, rs2) => {
-                e2c_dst = __newVar(rd.id)
-                e2c_val = __newVar(regfile(rs1) + regfile(rs2))
-                pc = pc + 1
+                if (
+                  !(
+                    e2c_dst_r == rd.id ||
+                      readVar(e2c_dst_r) == rs1.id ||
+                      readVar(e2c_dst_r) == rs2.id
+                  ) || (
+                    readVar(e2c_dst_r) == ZERO.id
+                  )
+                ) {
+                  e2c_dst_w = rd.id
+                  e2c_val_w = regfile(rs1) + regfile(rs2)
+                  pc.write(pc.read() + 1)
+                } else {
+                  e2c_dst_w = 0
+                  e2c_val_w = 0
+                }
               }
 
               case Addi(rd, rs1, imm) => {
-                e2c_dst = __newVar(rd.id)
-                e2c_val = __newVar(regfile(rs1) + imm)
-                pc = pc + 1
+                if (
+                  !(
+                    readVar(e2c_dst_r) == rd.id ||
+                      readVar(e2c_dst_r) == rs1.id
+                  ) || (
+                    readVar(e2c_dst_r) == ZERO.id
+                  )
+                ) {
+                  e2c_dst_w = rd.id
+                  e2c_val_w = regfile(rs1) + imm
+                  pc.write(pc.read() + 1)
+                } else {
+                  e2c_dst_w = 0
+                  e2c_val_w = 0
+                }
               }
 
               case BrNEZ(rs, target) => {
-                if (regfile(rs) != 0) pc = pc + target
-                else pc = pc + 1
+                if (readVar(e2c_dst_r) == rs.id) {
+                  if (readVar(e2c_val_r) != 0) {
+                    e2c_dst_w = 0
+                    e2c_val_w = 0
+                    pc.write(pc.read() + target)
+                  }
+                  else {
+                    e2c_dst_w = 0
+                    e2c_val_w = 0
+                    pc.write(pc.read() + 1)
+                  }
+                }
+                else {
+                }
               }
-
             }
           }
+
         }
       }
-      regfile(readVar(e2c_dst)) = readVar(e2c_val) // let a cycle bubble through
+      regfile(readVar(e2c_dst_r)) = readVar(e2c_val_r)
+      // let a cycle bubble through
       regfile
     }
   }
@@ -226,7 +298,40 @@ int main(int argc, char *argv[]) {
         run(Fibprog, (initRegFile, 0))
       }
     }
-    check("1", snippet.code)
+    exec("1", snippet.code)
+  }
+
+  test("proc raw hazard") {
+    val snippet = new DslDriverX[Array[Int], Array[Int]] with Interp {
+      val prog = List(
+        Addi(A0, ZERO, 1),
+        Addi(A1, A0, 1), // RAW
+        Addi(A2, A1, 1), // RAW
+        Addi(A3, A1, 2) // NO RAW
+      )
+      val expected = expectedResult(prog)
+      override val main = constructMain(expected)
+      def snippet(initRegFile: RegFile) = {
+        run(prog, (initRegFile, 0))
+      }
+    }
+    exec("raw_hazard", snippet.code)
+  }
+
+  test("proc loop") {
+    val snippet = new DslDriverX[Array[Int], Array[Int]] with Interp {
+      val prog = List(
+        Addi(A0, ZERO, 3),
+        Addi(A0, A0, -1),
+        BrNEZ(A0, -1)
+      )
+      val expected = expectedResult(prog)
+      override val main = constructMain(expected)
+      def snippet(initRegFile: RegFile) = {
+        run(prog, (initRegFile, 0))
+      }
+    }
+    exec("loop_hazard", snippet.code)
   }
 
   test("proc hazard") {
@@ -243,15 +348,15 @@ int main(int argc, char *argv[]) {
         Add(A1, A0, A3), // RAW, RAR
         Add(A2, A1, A0), // RAW, RAR
         Add(A3, A2, A1), // RAW, RAR
-        Add(A3, A0, A3), // WAW, RAW
-      ) 
+        Add(A3, A0, A3) // WAW, RAW
+      )
       val expected = expectedResult(prog)
       override val main = constructMain(expected)
       def snippet(initRegFile: RegFile) = {
         run(prog, (initRegFile, 0))
       }
     }
-    check("hazard", snippet.code)
+    exec("hazard", snippet.code)
 
   }
 
@@ -268,7 +373,7 @@ int main(int argc, char *argv[]) {
       }
 
     }
-    check("stress", snippet.code)
+    exec("stress", snippet.code)
   }
 
 }
