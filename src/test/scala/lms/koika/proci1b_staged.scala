@@ -22,6 +22,10 @@ int main(int argc, char *argv[]) {
 
   def constructMain(expected: Array[Int]): String = {
     var ret = s"""
+// cc -DRUN file.c for execution
+#ifdef RUN
+#define __CPROVER_assert(b,s) 0
+#endif
 int main(int argc, char *argv[]) {
   int regfile[7] = {0, 0, 0, 0, 0, 0, 0};
   Snippet(regfile);
@@ -37,6 +41,7 @@ int main(int argc, char *argv[]) {
 
     for (i <- 0 until expected.length) {
       ret += s"""
+  __CPROVER_assert(regfile[$i]==${expected(i)}, "failure $i");
   if (regfile[$i] != ${expected(i)}) {
     printf("error: regfile[$i] = %d, expected ${expected(i)}\\n", regfile[$i]);
     printf("\\nRegfile:\\n");
