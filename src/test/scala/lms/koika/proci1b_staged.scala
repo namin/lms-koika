@@ -90,23 +90,21 @@ int main(int argc, char *argv[]) {
     type State = (RegFile, PC)
 
     class Port {
-      var valid: Var[Boolean] = __newVar(false)
       var rdata: Var[Int] = __newVar(0)
       var wdata: Var[Int] = __newVar(0)
-      def read(): Rep[Int] = {
-        if (valid) rdata
-        else 0
-      }
+      def read(): Rep[Int] = rdata
       def write(d: Rep[Int]): Rep[Unit] = {
         wdata = d
-        valid = true
       }
-      def flush(): Rep[Unit] = valid = false
+      def flush(): Rep[Unit] = {
+        wdata = 0
+      }
       def update(): Rep[Unit] = {
-        rdata = readVar(wdata)
+        rdata = wdata
       }
+      def isZero(): Rep[Boolean] = read() != 0
+      def isAmong(vs: List[Rep[Int]]): Rep[Boolean] = vs.contains(read())
     }
-      
 
     def println(s: String) = if (DEBUG) Predef.println(s) else ()
 
@@ -155,73 +153,57 @@ int main(int argc, char *argv[]) {
     def run(prog: Program, state: (RegFile, PC)): RegFile = {
       val regfile: RegFile = state._1
       var pc: Port = new Port
-      var e2c_dst_w: Var[Int] = __newVar(0)
-      var e2c_val_w: Var[Int] = __newVar(0)
-      var e2c_dst_r: Var[Int] = __newVar(0)
-      var e2c_val_r: Var[Int] = __newVar(0)
-
+      var e2c_dst: Port = new Port
+      var e2c_val: Port = new Port
 
       while (0 <= pc.read() && pc.read() < prog.length) {
-        pc.update()
         // Commit stage
-        regfile(readVar(e2c_dst_r)) = readVar(e2c_val_r)
-        e2c_dst_r = e2c_dst_w
-        e2c_val_r = e2c_val_w
+        regfile(e2c_dst.read()) = e2c_val.read()
+        // pipeline update
+        pc.update()
+        e2c_dst.update()
+        e2c_val.update()
         // Execute stage
         for (i <- (0 until prog.length): Range) {
-          if (i == pc.read()) { 
+          if (i == pc.read()) {
             prog(i) match {
               case Add(rd, rs1, rs2) => {
                 if (
-                  !(
-                    e2c_dst_r == rd.id ||
-                      readVar(e2c_dst_r) == rs1.id ||
-                      readVar(e2c_dst_r) == rs2.id
-                  ) || (
-                    readVar(e2c_dst_r) == ZERO.id
-                  )
+                  !(List(rd, rs1, rs2).contains(e2c_dst.read())) ||
+                  unit(0) == e2c_dst.read()
                 ) {
-                  e2c_dst_w = rd.id
-                  e2c_val_w = regfile(rs1) + regfile(rs2)
+                  e2c_dst.write(rd)
+                  e2c_val.write(regfile(rs1) + regfile(rs2))
                   pc.write(pc.read() + 1)
                 } else {
-                  e2c_dst_w = 0
-                  e2c_val_w = 0
+                  e2c_dst.write(0)
+                  e2c_val.write(0)
                 }
               }
 
               case Addi(rd, rs1, imm) => {
                 if (
-                  !(
-                    readVar(e2c_dst_r) == rd.id ||
-                      readVar(e2c_dst_r) == rs1.id
-                  ) || (
-                    readVar(e2c_dst_r) == ZERO.id
-                  )
+                  !(List(rd, rs1).contains(e2c_dst.read())) ||
+                  unit(0) == e2c_dst.read()
                 ) {
-                  e2c_dst_w = rd.id
-                  e2c_val_w = regfile(rs1) + imm
+                  e2c_dst.write(rd)
+                  e2c_val.write(regfile(rs1) + imm)
                   pc.write(pc.read() + 1)
                 } else {
-                  e2c_dst_w = 0
-                  e2c_val_w = 0
+                  e2c_dst.write(0)
+                  e2c_val.write(0)
                 }
               }
 
               case BrNEZ(rs, target) => {
-                if (readVar(e2c_dst_r) == rs.id) {
-                  if (readVar(e2c_val_r) != 0) {
-                    e2c_dst_w = 0
-                    e2c_val_w = 0
+                if (e2c_dst.read() == rs.id) {
+                  if (e2c_val.read() == 0) {
+                    pc.write(pc.read() + 1)
+                  } else {
                     pc.write(pc.read() + target)
                   }
-                  else {
-                    e2c_dst_w = 0
-                    e2c_val_w = 0
-                    pc.write(pc.read() + 1)
-                  }
-                }
-                else {
+                  e2c_dst.write(0)
+                  e2c_val.write(0)
                 }
               }
             }
@@ -229,7 +211,6 @@ int main(int argc, char *argv[]) {
 
         }
       }
-      regfile(readVar(e2c_dst_r)) = readVar(e2c_val_r)
       // let a cycle bubble through
       regfile
     }
@@ -306,8 +287,7 @@ int main(int argc, char *argv[]) {
       val prog = List(
         Addi(A0, ZERO, 1),
         Addi(A1, A0, 1), // RAW
-        Addi(A2, A1, 1), // RAW
-        Addi(A3, A1, 2) // NO RAW
+        Addi(A3, A2, 2) // NO RAW
       )
       val expected = expectedResult(prog)
       override val main = constructMain(expected)
