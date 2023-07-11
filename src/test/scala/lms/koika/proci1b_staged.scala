@@ -22,8 +22,9 @@ int main(int argc, char *argv[]) {
 
   def constructMain(expected: Array[Int]): String = {
     var ret = s"""
-// cc -DRUN file.c for execution
-#ifdef RUN
+// cc file.c for execution
+// cbmc -DCBMC file.c for verification
+#ifndef CBMC
 #define __CPROVER_assert(b,s) 0
 #endif
 int main(int argc, char *argv[]) {
@@ -32,34 +33,38 @@ int main(int argc, char *argv[]) {
 """
     var printexpected = s"""
   printf("\\nexpected:\\n");
-  """
+  printf(""""
     for (i <- 0 until expected.length) {
-      printexpected += s"""
-  printf("${expected(i)} ");
-"""
+      printexpected += s"""${expected(i)} """
     }
+    printexpected += s""" ");
+"""
 
     for (i <- 0 until expected.length) {
       ret += s"""
   __CPROVER_assert(regfile[$i]==${expected(i)}, "failure $i");
   if (regfile[$i] != ${expected(i)}) {
     printf("error: regfile[$i] = %d, expected ${expected(i)}\\n", regfile[$i]);
-    printf("\\nRegfile:\\n");
-    for (int i = 0; i < 6; i++) {
-      printf("%d ", regfile[i]);
-    }
-    ${printexpected}
-    printf("\\n\\nFAILED\\n");
-    return 1;
+    goto error;
   }
 """
     }
-    ret += """
-  printf("OK\n");
+    ret += s"""
+  printf("OK\\n");
   return 0;
+error:
+  printf("\\nRegfile:\\n");
+  for (int i = 0; i < 6; i++) {
+    printf("%d ", regfile[i]);
+  }
+  ${printexpected}
+  printf("\\n\\nFAILED\\n");
+  return 1;
+
 }
 """
     ret
+
   }
 
   override def exec(label: String, code: String, suffix: String = "c") =
