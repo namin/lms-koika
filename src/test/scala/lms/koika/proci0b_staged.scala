@@ -21,29 +21,47 @@ int main(int argc, char *argv[]) {
   return 0;
 }
 """
-
   def constructMain(expected: Array[Int]): String = {
     var ret = s"""
+// cc file.c for execution
+// cbmc -DCBMC file.c for verification
+#ifndef CBMC
+#define __CPROVER_assert(b,s) 0
+#endif
 int main(int argc, char *argv[]) {
   int regfile[7] = {0, 0, 0, 0, 0, 0, 0};
   Snippet(regfile);
 """
+    var printexpected = s"""
+  printf("\\nexpected:\\n");
+  printf(""""
+    for (i <- 0 until expected.length) {
+      printexpected += s"""${expected(i)} """
+    }
+    printexpected += s""" ");
+"""
+
     for (i <- 0 until expected.length) {
       ret += s"""
+  __CPROVER_assert(regfile[$i]==${expected(i)}, "failure $i");
   if (regfile[$i] != ${expected(i)}) {
     printf("error: regfile[$i] = %d, expected ${expected(i)}\\n", regfile[$i]);
-    printf("\\nRegfile:\\n");
-    for (int i = 0; i < 6; i++) {
-      printf("%d ", regfile[i]);
-    }
-    printf("\\n\\nFAILED\\n");
-    return 1;
+    goto error;
   }
 """
     }
-    ret += """
-  printf("OK\n");
+    ret += s"""
+  printf("OK\\n");
   return 0;
+error:
+  printf("\\nRegfile:\\n");
+  for (int i = 0; i < 6; i++) {
+    printf("%d ", regfile[i]);
+  }
+  ${printexpected}
+  printf("\\n\\nFAILED\\n");
+  return 1;
+
 }
 """
     ret
@@ -90,6 +108,30 @@ int main(int argc, char *argv[]) {
 
     implicit def reg2int(r: Reg): Int = r.id
     implicit def reg2rep(r: Reg): Rep[Int] = unit(r.id)
+
+    class Port[T: Manifest](
+        init: T,
+        customEqual: Option[(Rep[T], Rep[T]) => Rep[Boolean]] = None
+    ) {
+
+      private var rdata: Var[T] = __newVar(init)
+      private var wdata: Var[T] = __newVar(init)
+
+      def equal(a: Rep[T], b: Rep[T]): Rep[Boolean] = customEqual match {
+        case Some(f) => f(a, b)
+        case None    => a == b
+      }
+
+      def read: Rep[T] = readVar(rdata)
+
+      def write(d: Rep[T]): Rep[Unit] = wdata = d
+
+      def update(): Rep[Unit] = rdata = wdata
+
+      def isZero(): Rep[Boolean] = equal(read, unit(init))
+      def isAmong(vs: List[T]): Rep[Boolean] =
+        vs.foldLeft(unit(false))((acc, v) => acc || read == unit(v))
+    }
 
     type State = RegFile
 
@@ -157,7 +199,9 @@ int main(int argc, char *argv[]) {
         case _ => ()
       }
 
-      var curblock: Var[String] = __newVar("entry") //
+      // var curblock: Port[String] = new Port[String]("entry", Some((a: Rep[String], b: Rep[String]) => a.equalsTo(b)))
+      var curblock: Var[String] = __newVar("entry")
+      var nextblock: Var[String] = __newVar("entry")
       var curprog: Program = prog
       var endprog: Var[Boolean] = false
       var e2c_dst_r: Var[Int] = __newVar(0)
@@ -165,6 +209,10 @@ int main(int argc, char *argv[]) {
       var e2c_val_w: Var[Int] = __newVar(0)
       var e2c_dst_w: Var[Int] = __newVar(0)
       while (!endprog) {
+        curblock = nextblock // TODO: figure out how to do this
+        regfile(e2c_dst_r) = e2c_val_r
+        e2c_dst_r = e2c_dst_w
+        e2c_val_r = e2c_val_w
         for (block <- id_to_prog.keys) {
           if (unit(block).equalsTo(readVar(curblock))) {
             curprog = id_to_prog(block)
@@ -173,34 +221,69 @@ int main(int argc, char *argv[]) {
               if (!break) {
                 curprog(i) match {
                   case Add(rd, rs1, rs2) => {
-                    e2c_dst_w = __newVar(rd.id)
-                    e2c_val_w = __newVar(regfile(rs1) + regfile(rs2))
+                    if (
+                      !(e2c_dst_r == rd.id || e2c_dst_r == rs1.id || e2c_dst_r == rs2.id) || (readVar(
+                        e2c_dst_r
+                      ) == ZERO.id)
+                    ) {
+                      e2c_dst_w = rd.id
+                      e2c_val_w = regfile(rs1) + regfile(rs2)
+                    } else {
+                      e2c_dst_w = 0
+                      e2c_val_w = 0
+                    }
+                    nextblock = curblock
                   }
 
                   case Addi(rd, rs1, imm) => {
-                    e2c_dst_w = __newVar(rd.id)
-                    e2c_val_w = __newVar(regfile(rs1) + imm)
+                    if (
+                      !(e2c_dst_r == rd.id || e2c_dst_r == rs1.id) || (readVar(
+                        e2c_dst_r
+                      ) == ZERO.id)
+                    ) {
+                      e2c_dst_w = rd.id
+                      e2c_val_w = regfile(rs1) + imm
+                    } else {
+                      e2c_dst_w = 0
+                      e2c_val_w = 0
+                    }
+                    nextblock = curblock
                   }
 
-                  case BrNEZ(rs, target) =>
-                    if (regfile(rs) != 0) {
-                      curblock = target
-                      break = true
+                  case BrNEZ(rs, target) => {
+                    if (readVar(e2c_dst_r) == rs.id) {
+                      if (readVar(e2c_val_r) != 0) {
+                        e2c_dst_w = 0
+                        e2c_val_w = 0
+                        nextblock = target
+                        break = true
+                      } else {
+                        nextblock = curblock
+                        e2c_dst_w = 0
+                        e2c_val_w = 0
+                      }
                     }
-                  case BrNEG(rs, target) =>
-                    if (regfile(rs) < 0) {
-                      curblock = target
-                      break = true
+                  }
+                  case BrNEG(rs, target) => {
+                    if (readVar(e2c_dst_r) == rs.id) {
+                      if (readVar(e2c_val_r) < 0) {
+                        e2c_dst_w = 0
+                        e2c_val_w = 0
+                        nextblock = target
+                        break = true
+                      } else {
+                        nextblock = curblock
+                        e2c_dst_w = 0
+                        e2c_val_w = 0
+                      }
                     }
+                  }
 
                   case BrTarget(id) => {
-                    curblock = id
+                    nextblock = id
                     break = true
                   }
                 }
-                regfile(e2c_dst_r) = e2c_val_r
-                e2c_dst_r = e2c_dst_w
-                e2c_val_r = e2c_val_w
               }
             }
           }
@@ -209,6 +292,7 @@ int main(int argc, char *argv[]) {
           endprog = true
         }
       }
+      regfile(e2c_dst_r) = e2c_val_r
       regfile
 
     }
@@ -281,6 +365,71 @@ int main(int argc, char *argv[]) {
       }
     }
     exec("1", snippet.code)
+  }
+
+  test("proc raw hazard") {
+    val snippet = new DslDriverX[Array[Int], Array[Int]] with Interp {
+      val prog = List(
+        BrTarget("entry"),
+        Addi(A0, ZERO, 1),
+        Addi(A1, A0, 1), // RAW
+        Addi(A3, A2, 2), // NO RAW
+        BrTarget("exit")
+      )
+      val expected = expectedResult(prog)
+      override val main = constructMain(expected)
+      def snippet(initRegFile: Rep[RegFile]) = {
+        run(prog, initRegFile)
+      }
+    }
+    exec("raw_hazard", snippet.code)
+  }
+
+  test("proc loop") {
+    val snippet = new DslDriverX[Array[Int], Array[Int]] with Interp {
+      val prog = List(
+        BrTarget("entry"),
+        Addi(A0, ZERO, 3),
+        BrTarget("loop"),
+        Addi(A0, A0, -1),
+        BrNEZ(A0, "loop"),
+        BrTarget("exit")
+      )
+      val expected = expectedResult(prog)
+      override val main = constructMain(expected)
+      def snippet(initRegFile: Rep[RegFile]) = {
+        run(prog, (initRegFile))
+      }
+    }
+    exec("loop_hazard", snippet.code)
+  }
+
+  test("proc hazard") {
+    val snippet = new DslDriverX[Array[Int], Array[Int]] with Interp {
+      // TODO: these hazards are not really hazards, because we commit before we execute the next stage.
+      // We should consider moving the commit phase later,
+      // and then also stalling in case of a dependency.
+      val prog = List(
+        BrTarget("entry"),
+        Addi(A0, ZERO, 1),
+        Add(A1, A0, A0), // RAW
+        Add(A2, A1, A0),
+        Add(A3, A2, A1),
+        Add(A0, A3, A2), // RAW
+        Add(A1, A0, A3), // RAW, RAR
+        Add(A2, A1, A0), // RAW, RAR
+        Add(A3, A2, A1), // RAW, RAR
+        Add(A3, A0, A3), // WAW, RAW
+        BrTarget("exit")
+      )
+      val expected = expectedResult(prog)
+      override val main = constructMain(expected)
+      def snippet(initRegFile: Rep[RegFile]) = {
+        run(prog, (initRegFile))
+      }
+    }
+    exec("hazard", snippet.code)
+
   }
 
   ignore("proc stress") {
