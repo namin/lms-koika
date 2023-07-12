@@ -39,7 +39,6 @@ int main(int argc, char *argv[]) {
     }
     printexpected += s""" ");
 """
-
     for (i <- 0 until expected.length) {
       ret += s"""
   __CPROVER_assert(regfile[$i]==${expected(i)}, "failure $i");
@@ -64,7 +63,6 @@ error:
 }
 """
     ret
-
   }
 
   override def exec(label: String, code: String, suffix: String = "c") =
@@ -80,7 +78,7 @@ error:
     case class BrNEZ(rs: Reg, imm: Int) extends Instruction
 
     type Program = List[Instruction]
-    type RegFile = Rep[Array[Int]]
+    type RegFile = Array[Int]
     type PC = Rep[Int]
 
     case class Reg(id: Int)
@@ -104,23 +102,26 @@ error:
         customEqual: Option[(Rep[T], Rep[T]) => Rep[Boolean]] = None
     ) {
 
-      private var rdata: Var[T] = __newVar(init)
-      private var wdata: Var[T] = __newVar(init)
+      private var readport: Var[T] = __newVar(init)
+      private var writeport: Var[T] = __newVar(init)
 
-      def equal(a: Rep[T], b: Rep[T]): Rep[Boolean] = customEqual match {
-        case Some(f) => f(a, b)
-        case None    => a == b
-      }
+      private def equal(a: Rep[T], b: Rep[T]): Rep[Boolean] =
+        customEqual match {
+          case Some(f) => f(a, b)
+          case None    => a == b
+        }
 
-      def read: Rep[T] = readVar(rdata)
+      def read: Rep[T] = readVar(readport)
 
-      def write(d: Rep[T]): Rep[Unit] = wdata = d
+      def write(d: Rep[T]): Rep[Unit] = writeport = d
 
-      def update(): Rep[Unit] = rdata = wdata
+      def flush(): Rep[Unit] = writeport = init
 
-      def isZero(): Rep[Boolean] = equal(read, unit(init))
-      def isAmong(vs: List[T]): Rep[Boolean] =
-        vs.foldLeft(unit(false))((acc, v) => acc || read == unit(v))
+      def update(): Rep[Unit] = readport = writeport
+
+      def isDefault: Rep[Boolean] = equal(read, unit(init))
+      def isAmong(vs: T*): Rep[Boolean] =
+        vs.foldLeft(unit(false))((acc, v) => acc || equal(read, unit(v)))
     }
 
     def println(s: String) = if (DEBUG) Predef.println(s) else ()
@@ -167,49 +168,50 @@ error:
 
     }
 
-    def run(prog: Program, state: (RegFile, PC)): RegFile = {
-      val regfile: RegFile = state._1
+    def run(prog: Program, state: (Rep[RegFile], PC)): Rep[RegFile] = {
+      val regfile: Rep[RegFile] = state._1
       var pc: Port[Int] = new Port[Int](0)
       var e2c_dst: Port[Int] = new Port[Int](0)
       var e2c_val: Port[Int] = new Port[Int](0)
 
       while (0 <= pc.read && pc.read < prog.length) {
-        pc.update() // TODO formalise why this is needed
+        // The reason why we need this is because the branch instruction could
+        // stall in E stage, waiting on C stage to update rs.
+        // So pc should stay the same until the branch is executed.
+        pc.update()
+
         // Commit stage
         regfile(e2c_dst.read) = e2c_val.read
+
         // pipeline update
         e2c_dst.update()
         e2c_val.update()
+
         // Execute stage
         for (i <- (0 until prog.length): Range) {
           if (i == pc.read) {
             prog(i) match {
               case Add(rd, rs1, rs2) => {
-                if (
-                  !e2c_dst
-                    .isAmong(List(rd, rs1, rs2)) || unit(0) == e2c_dst.read
-                ) {
+                if (!e2c_dst.isAmong(rd, rs1, rs2) || e2c_dst.isDefault) {
                   e2c_dst.write(rd)
                   e2c_val.write(regfile(rs1) + regfile(rs2))
                   pc.write(pc.read + 1)
                 } else {
                   // stall
-                  e2c_dst.write(0)
-                  e2c_val.write(0)
+                  e2c_dst.flush()
+                  e2c_val.flush()
                 }
               }
 
               case Addi(rd, rs1, imm) => {
-                if (
-                  !e2c_dst.isAmong(List(rd, rs1)) || unit(0) == e2c_dst.read
-                ) {
+                if (!e2c_dst.isAmong(rd, rs1) || e2c_dst.isDefault) {
                   e2c_dst.write(rd)
                   e2c_val.write(regfile(rs1) + imm)
                   pc.write(pc.read + 1)
                 } else {
                   // stall
-                  e2c_dst.write(0)
-                  e2c_val.write(0)
+                  e2c_dst.flush()
+                  e2c_val.flush()
                 }
               }
 
@@ -220,10 +222,11 @@ error:
                   } else {
                     pc.write(pc.read + target)
                   }
-                } // otherwise stall
-                e2c_dst.write(0)
-                e2c_val.write(0)
+                }
+                e2c_dst.flush()
+                e2c_val.flush()
               }
+
             }
           }
         }
@@ -292,7 +295,7 @@ error:
       )
       val expected = expectedResult(Fibprog)
       override val main = constructMain(expected)
-      def snippet(initRegFile: RegFile) = {
+      def snippet(initRegFile: Rep[RegFile]) = {
 
         run(Fibprog, (initRegFile, 0))
       }
@@ -309,7 +312,7 @@ error:
       )
       val expected = expectedResult(prog)
       override val main = constructMain(expected)
-      def snippet(initRegFile: RegFile) = {
+      def snippet(initRegFile: Rep[RegFile]) = {
         run(prog, (initRegFile, 0))
       }
     }
@@ -325,7 +328,7 @@ error:
       )
       val expected = expectedResult(prog)
       override val main = constructMain(expected)
-      def snippet(initRegFile: RegFile) = {
+      def snippet(initRegFile: Rep[RegFile]) = {
         run(prog, (initRegFile, 0))
       }
     }
@@ -334,9 +337,6 @@ error:
 
   test("proc hazard") {
     val snippet = new DslDriverX[Array[Int], Array[Int]] with Interp {
-      // TODO: these hazards are not really hazards, because we commit before we execute the next stage.
-      // We should consider moving the commit phase later,
-      // and then also stalling in case of a dependency.
       val prog = List(
         Addi(A0, ZERO, 1),
         Add(A1, A0, A0), // RAW
@@ -350,7 +350,7 @@ error:
       )
       val expected = expectedResult(prog)
       override val main = constructMain(expected)
-      def snippet(initRegFile: RegFile) = {
+      def snippet(initRegFile: Rep[RegFile]) = {
         run(prog, (initRegFile, 0))
       }
     }
@@ -366,7 +366,7 @@ error:
       val expected: Array[Int] = expectedResult(program)
       override val main = constructMain(expected)
 
-      def snippet(initRegFile: RegFile) = {
+      def snippet(initRegFile: Rep[RegFile]) = {
         run(program, (initRegFile, 0))
       }
 

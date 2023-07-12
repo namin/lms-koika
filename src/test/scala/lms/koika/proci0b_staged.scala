@@ -114,23 +114,26 @@ error:
         customEqual: Option[(Rep[T], Rep[T]) => Rep[Boolean]] = None
     ) {
 
-      private var rdata: Var[T] = __newVar(init)
-      private var wdata: Var[T] = __newVar(init)
+      private var readport: Var[T] = __newVar(init)
+      private var writeport: Var[T] = __newVar(init)
 
-      def equal(a: Rep[T], b: Rep[T]): Rep[Boolean] = customEqual match {
-        case Some(f) => f(a, b)
-        case None    => a == b
-      }
+      private def equal(a: Rep[T], b: Rep[T]): Rep[Boolean] =
+        customEqual match {
+          case Some(f) => f(a, b)
+          case None    => a == b
+        }
 
-      def read: Rep[T] = readVar(rdata)
+      def read: Rep[T] = readVar(readport)
 
-      def write(d: Rep[T]): Rep[Unit] = wdata = d
+      def write(data: Rep[T]): Rep[Unit] = writeport = data
 
-      def update(): Rep[Unit] = rdata = wdata
+      def flush(): Rep[Unit] = writeport = init
 
-      def isZero(): Rep[Boolean] = equal(read, unit(init))
-      def isAmong(vs: List[T]): Rep[Boolean] =
-        vs.foldLeft(unit(false))((acc, v) => acc || read == unit(v))
+      def update(): Rep[Unit] = readport = writeport
+
+      def isDefault: Rep[Boolean] = equal(read, unit(init))
+      def isAmong(vs: T*): Rep[Boolean] =
+        vs.foldLeft(unit(false))((acc, v) => acc || equal(read, unit(v)))
     }
 
     type State = RegFile
@@ -204,79 +207,70 @@ error:
       var nextblock: Var[String] = __newVar("entry")
       var curprog: Program = prog
       var endprog: Var[Boolean] = false
-      var e2c_dst_r: Var[Int] = __newVar(0)
-      var e2c_val_r: Var[Int] = __newVar(0)
-      var e2c_val_w: Var[Int] = __newVar(0)
-      var e2c_dst_w: Var[Int] = __newVar(0)
+
+      var e2c_dst: Port[Int] = new Port[Int](0)
+      var e2c_val: Port[Int] = new Port[Int](0)
+
       while (!endprog) {
+
         curblock = nextblock // TODO: figure out how to do this
-        regfile(e2c_dst_r) = e2c_val_r
-        e2c_dst_r = e2c_dst_w
-        e2c_val_r = e2c_val_w
+
         for (block <- id_to_prog.keys) {
+
           if (unit(block).equalsTo(readVar(curblock))) {
             curprog = id_to_prog(block)
             var break = false
+
             for (i <- (0 until curprog.length): Range) {
               if (!break) {
                 curprog(i) match {
                   case Add(rd, rs1, rs2) => {
-                    if (
-                      !(e2c_dst_r == rd.id || e2c_dst_r == rs1.id || e2c_dst_r == rs2.id) || (readVar(
-                        e2c_dst_r
-                      ) == ZERO.id)
-                    ) {
-                      e2c_dst_w = rd.id
-                      e2c_val_w = regfile(rs1) + regfile(rs2)
+                    if (!e2c_dst.isAmong(rd, rs1, rs2) || e2c_dst.isDefault) {
+                      e2c_dst.write(rd)
+                      e2c_val.write(regfile(rs1) + regfile(rs2))
                     } else {
-                      e2c_dst_w = 0
-                      e2c_val_w = 0
+                      e2c_dst.flush()
+                      e2c_val.flush()
                     }
                     nextblock = curblock
                   }
 
                   case Addi(rd, rs1, imm) => {
-                    if (
-                      !(e2c_dst_r == rd.id || e2c_dst_r == rs1.id) || (readVar(
-                        e2c_dst_r
-                      ) == ZERO.id)
-                    ) {
-                      e2c_dst_w = rd.id
-                      e2c_val_w = regfile(rs1) + imm
+                    if (!e2c_dst.isAmong(rd, rs1) || e2c_dst.isDefault) {
+                      e2c_dst.write(rd)
+                      e2c_val.write(regfile(rs1) + imm)
                     } else {
-                      e2c_dst_w = 0
-                      e2c_val_w = 0
+                      e2c_dst.flush()
+                      e2c_val.flush()
                     }
                     nextblock = curblock
                   }
 
                   case BrNEZ(rs, target) => {
-                    if (readVar(e2c_dst_r) == rs.id) {
-                      if (readVar(e2c_val_r) != 0) {
-                        e2c_dst_w = 0
-                        e2c_val_w = 0
+                    if (!e2c_dst.isAmong(rs)) {
+                      if (e2c_val.read != 0) {
                         nextblock = target
                         break = true
                       } else {
                         nextblock = curblock
-                        e2c_dst_w = 0
-                        e2c_val_w = 0
                       }
                     }
+                    e2c_dst.flush()
+                    e2c_val.flush()
+
                   }
+
                   case BrNEG(rs, target) => {
-                    if (readVar(e2c_dst_r) == rs.id) {
-                      if (readVar(e2c_val_r) < 0) {
-                        e2c_dst_w = 0
-                        e2c_val_w = 0
+                    if (!e2c_dst.isAmong(rs)) {
+                      if (e2c_val.read < 0) {
                         nextblock = target
                         break = true
                       } else {
                         nextblock = curblock
-                        e2c_dst_w = 0
-                        e2c_val_w = 0
                       }
                     }
+                    e2c_dst.flush()
+                    e2c_val.flush()
                   }
 
                   case BrTarget(id) => {
@@ -284,6 +278,11 @@ error:
                     break = true
                   }
                 }
+
+                regfile(e2c_dst.read) = e2c_val.read
+
+                e2c_dst.update()
+                e2c_val.update()
               }
             }
           }
@@ -292,7 +291,7 @@ error:
           endprog = true
         }
       }
-      regfile(e2c_dst_r) = e2c_val_r
+      regfile(e2c_dst.read) = e2c_val.read
       regfile
 
     }
@@ -406,9 +405,6 @@ error:
 
   test("proc hazard") {
     val snippet = new DslDriverX[Array[Int], Array[Int]] with Interp {
-      // TODO: these hazards are not really hazards, because we commit before we execute the next stage.
-      // We should consider moving the commit phase later,
-      // and then also stalling in case of a dependency.
       val prog = List(
         BrTarget("entry"),
         Addi(A0, ZERO, 1),
