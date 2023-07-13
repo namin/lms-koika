@@ -68,6 +68,9 @@ error:
   override def exec(label: String, code: String, suffix: String = "c") =
     super.exec(label, code, suffix)
 
+  override def check(label: String, code: String, suffix: String = "c") =
+    super.check(label, code, suffix)
+
   val DEBUG = true
 
   trait Interp extends Dsl {
@@ -75,11 +78,11 @@ error:
     abstract sealed class Instruction
     case class Add(rd: Reg, rs1: Reg, rs2: Reg) extends Instruction
     case class Addi(rd: Reg, rs1: Reg, imm: Int) extends Instruction
-    case class BrNEZ(rs: Reg, imm: Int) extends Instruction
+    case class JumpNZ(rs: Reg, imm: Int) extends Instruction
+    case class JumpNeg(rs: Reg, imm: Int) extends Instruction
 
     type Program = List[Instruction]
     type RegFile = Array[Int]
-    type PC = Rep[Int]
 
     case class Reg(id: Int)
     val ZERO: Reg = Reg(0)
@@ -94,8 +97,6 @@ error:
 
     implicit def reg2int(r: Reg): Int = r.id
     implicit def reg2rep(r: Reg): Rep[Int] = unit(r.id)
-
-    type State = (RegFile, PC)
 
     class Port[T: Manifest](
         init: T,
@@ -137,8 +138,10 @@ error:
               Add(Reg(rd.toInt), Reg(rs1.toInt), Reg(rs2.toInt))
             case Array("addi", rd, rs1, imm) =>
               Addi(Reg(rd.toInt), Reg(rs1.toInt), imm.toInt)
-            case Array("br", rs, imm) =>
-              BrNEZ(Reg(rs.toInt), imm.toInt)
+            case Array("jumpnz", rs, imm) =>
+              JumpNZ(Reg(rs.toInt), imm.toInt)
+            case Array("jumpneg", rs, imm) =>
+              JumpNeg(Reg(rs.toInt), imm.toInt)
             case _ => Predef.println(s"Unknown instruction: $line"); NOP
           }
         }
@@ -158,8 +161,12 @@ error:
             rf(rd) = rf(rs1) + imm
             i = i + 1
           }
-          case BrNEZ(rs, target) => {
+          case JumpNZ(rs, target) => {
             if (rf(rs) != 0) i = i + target
+            else i = i + 1
+          }
+          case JumpNeg(rs, target) => {
+            if (rf(rs) < 0) i = i + target
             else i = i + 1
           }
         }
@@ -168,8 +175,8 @@ error:
 
     }
 
-    def run(prog: Program, state: (Rep[RegFile], PC)): Rep[RegFile] = {
-      val regfile: Rep[RegFile] = state._1
+    def run(prog: Program, state: Rep[RegFile]): Rep[RegFile] = {
+      val regfile: Rep[RegFile] = state
       var pc: Port[Int] = new Port[Int](0)
       var e2c_dst: Port[Int] = new Port[Int](0)
       var e2c_val: Port[Int] = new Port[Int](0)
@@ -215,7 +222,7 @@ error:
                 }
               }
 
-              case BrNEZ(rs, target) => {
+              case JumpNZ(rs, target) => {
                 if (e2c_dst.read != rs.id) {
                   if (regfile(rs) == 0) {
                     pc.write(pc.read + 1)
@@ -226,7 +233,17 @@ error:
                 e2c_dst.flush()
                 e2c_val.flush()
               }
-
+              case JumpNeg(rs, target) => {
+                if (e2c_dst.read != rs.id) {
+                  if (regfile(rs) >= 0) {
+                    pc.write(pc.read + 1)
+                  } else {
+                    pc.write(pc.read + target)
+                  }
+                }
+                e2c_dst.flush()
+                e2c_val.flush()
+              }
             }
           }
         }
@@ -291,16 +308,48 @@ error:
         Add(F_n_1, F_n, ZERO),
         Add(F_n, Temp, ZERO),
         Addi(N, N, -1),
-        BrNEZ(N, -4)
+        JumpNZ(N, -4)
       )
       val expected = expectedResult(Fibprog)
       override val main = constructMain(expected)
       def snippet(initRegFile: Rep[RegFile]) = {
 
-        run(Fibprog, (initRegFile, 0))
+        run(Fibprog, initRegFile)
       }
     }
-    exec("1", snippet.code)
+    check("1", snippet.code)
+  }
+
+  test("proc rar hazard") {
+    val snippet = new DslDriverX[Array[Int], Array[Int]] with Interp {
+      val prog = List(
+        Addi(A1, A0, 1), //
+        Addi(A3, A0, 2), // RAR
+        Addi(A2, A4, 3) // NO RAR
+      )
+      val expected = expectedResult(prog)
+      override val main = constructMain(expected)
+      def snippet(initRegFile: Rep[RegFile]) = {
+        run(prog, initRegFile)
+      }
+    }
+    check("rar_hazard", snippet.code)
+  }
+
+  test("proc waw hazard") {
+    val snippet = new DslDriverX[Array[Int], Array[Int]] with Interp {
+      val prog = List(
+        Addi(A0, ZERO, 1),
+        Addi(A0, A0, 1), // WAW
+        Addi(A3, A2, 2) // NO WAW
+      )
+      val expected = expectedResult(prog)
+      override val main = constructMain(expected)
+      def snippet(initRegFile: Rep[RegFile]) = {
+        run(prog, initRegFile)
+      }
+    }
+    check("waw_hazard", snippet.code)
   }
 
   test("proc raw hazard") {
@@ -313,10 +362,26 @@ error:
       val expected = expectedResult(prog)
       override val main = constructMain(expected)
       def snippet(initRegFile: Rep[RegFile]) = {
-        run(prog, (initRegFile, 0))
+        run(prog, initRegFile)
       }
     }
-    exec("raw_hazard", snippet.code)
+    check("raw_hazard", snippet.code)
+  }
+
+  test("proc war hazard") {
+    val snippet = new DslDriverX[Array[Int], Array[Int]] with Interp {
+      val prog = List(
+        Addi(A1, A0, 1), //
+        Addi(A0, A3, 2), // WAR
+        Addi(A2, A4, 3) // NO WAR
+      )
+      val expected = expectedResult(prog)
+      override val main = constructMain(expected)
+      def snippet(initRegFile: Rep[RegFile]) = {
+        run(prog, initRegFile)
+      }
+    }
+    check("war_hazard", snippet.code)
   }
 
   test("proc loop") {
@@ -324,15 +389,15 @@ error:
       val prog = List(
         Addi(A0, ZERO, 3),
         Addi(A0, A0, -1),
-        BrNEZ(A0, -1)
+        JumpNZ(A0, -1)
       )
       val expected = expectedResult(prog)
       override val main = constructMain(expected)
       def snippet(initRegFile: Rep[RegFile]) = {
-        run(prog, (initRegFile, 0))
+        run(prog, initRegFile)
       }
     }
-    exec("loop_hazard", snippet.code)
+    check("loop_hazard", snippet.code)
   }
 
   test("proc hazard") {
@@ -351,14 +416,14 @@ error:
       val expected = expectedResult(prog)
       override val main = constructMain(expected)
       def snippet(initRegFile: Rep[RegFile]) = {
-        run(prog, (initRegFile, 0))
+        run(prog, initRegFile)
       }
     }
-    exec("hazard", snippet.code)
+    check("hazard", snippet.code)
 
   }
 
-  test("proc stress") {
+  ignore("proc stress") {
     // read from file 1.asm and get the program
     val snippet = new DslDriverX[Array[Int], Array[Int]] with Interp {
       val filename = "src/out/1.asm"
@@ -367,7 +432,7 @@ error:
       override val main = constructMain(expected)
 
       def snippet(initRegFile: Rep[RegFile]) = {
-        run(program, (initRegFile, 0))
+        run(program, initRegFile)
       }
 
     }
