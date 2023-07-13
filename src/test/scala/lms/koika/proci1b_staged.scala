@@ -81,6 +81,10 @@ error:
     case class JumpNZ(rs: Reg, imm: Int) extends Instruction
     case class JumpNeg(rs: Reg, imm: Int) extends Instruction
 
+    val AddOp = 0
+    val EqOp = 1
+    val LtOp = 2
+
     type Program = List[Instruction]
     type RegFile = Array[Int]
 
@@ -97,6 +101,7 @@ error:
 
     implicit def reg2int(r: Reg): Int = r.id
     implicit def reg2rep(r: Reg): Rep[Int] = unit(r.id)
+
 
     class Port[T: Manifest](
         init: T,
@@ -172,12 +177,32 @@ error:
         }
       }
       rf
+    }
 
+    def execute(
+        dst: Rep[Int],
+        op1: Rep[Int],
+        op2: Rep[Int],
+        op: Rep[Int]
+    ): (Rep[Int], Rep[Int]) = {
+      val e_val =
+        if (op == AddOp) op1 + op2
+        else if (op == EqOp) if (op1 == op2) 1 else 0
+        else if (op == LtOp) if (op1 < op2) 1
+        else 0
+      val e_dst = dst
+      (e_dst, e_val)
     }
 
     def run(prog: Program, state: Rep[RegFile]): Rep[RegFile] = {
       val regfile: Rep[RegFile] = state
       var pc: Port[Int] = new Port[Int](0)
+
+      var f2e_dst: Port[Int] = new Port[Int](0)
+      var f2e_val1: Port[Int] = new Port[Int](0)
+      var f2e_val2: Port[Int] = new Port[Int](0)
+      var f2e_op: Port[Int] = new Port[Int](0)
+
       var e2c_dst: Port[Int] = new Port[Int](0)
       var e2c_val: Port[Int] = new Port[Int](0)
 
@@ -187,69 +212,131 @@ error:
         // So pc should stay the same until the branch is executed.
         pc.update()
 
-        // Commit stage
-        regfile(e2c_dst.read) = e2c_val.read
-
         // pipeline update
         e2c_dst.update()
         e2c_val.update()
 
+        f2e_dst.update()
+        f2e_val1.update()
+        f2e_val2.update()
+        f2e_op.update()
+
+        // Commit stage
+        regfile(e2c_dst.read) = e2c_val.read
+
         // Execute stage
+        val (e_dst, e_val) = execute(
+          f2e_dst.read,
+          f2e_val1.read,
+          f2e_val2.read,
+          f2e_op.read
+        )
+
+        e2c_dst.write(e_dst)
+        e2c_val.write(e_val)
+
+        // Fetch stage
+
         for (i <- (0 until prog.length): Range) {
           if (i == pc.read) {
             prog(i) match {
               case Add(rd, rs1, rs2) => {
-                if (!e2c_dst.isAmong(rd, rs1, rs2) || e2c_dst.isDefault) {
-                  e2c_dst.write(rd)
-                  e2c_val.write(regfile(rs1) + regfile(rs2))
+                if (
+                  (!e2c_dst.isAmong(rd, rs1, rs2) || e2c_dst.isDefault) &&
+                  (!f2e_dst.isAmong(rd, rs1, rs2) || f2e_dst.isDefault)
+                ) {
+                  f2e_dst.write(rd)
+                  f2e_val1.write(regfile(rs1))
+                  f2e_val2.write(regfile(rs2))
+                  f2e_op.write(AddOp)
                   pc.write(pc.read + 1)
                 } else {
                   // stall
-                  e2c_dst.flush()
-                  e2c_val.flush()
+                  f2e_dst.flush()
+                  f2e_val1.flush()
+                  f2e_val2.flush()
+                  f2e_op.flush()
                 }
               }
 
               case Addi(rd, rs1, imm) => {
-                if (!e2c_dst.isAmong(rd, rs1) || e2c_dst.isDefault) {
-                  e2c_dst.write(rd)
-                  e2c_val.write(regfile(rs1) + imm)
+                if (
+                  (!e2c_dst.isAmong(rd, rs1) || e2c_dst.isDefault) &&
+                  (!f2e_dst.isAmong(rd, rs1) || f2e_dst.isDefault)
+                ) {
+                  f2e_dst.write(rd)
+                  f2e_val1.write(regfile(rs1))
+                  f2e_val2.write(imm)
+                  f2e_op.write(AddOp)
                   pc.write(pc.read + 1)
                 } else {
                   // stall
-                  e2c_dst.flush()
-                  e2c_val.flush()
+                  f2e_dst.flush()
+                  f2e_val1.flush()
+                  f2e_val2.flush()
+                  f2e_op.flush()
                 }
               }
 
               case JumpNZ(rs, target) => {
-                if (e2c_dst.read != rs.id) {
+                if (e2c_dst.read != rs.id && f2e_dst.read != rs.id) {
                   if (regfile(rs) == 0) {
                     pc.write(pc.read + 1)
                   } else {
                     pc.write(pc.read + target)
                   }
                 }
-                e2c_dst.flush()
-                e2c_val.flush()
+                f2e_dst.flush()
+                f2e_val1.flush()
+                f2e_val2.flush()
+                f2e_op.flush()
+
               }
               case JumpNeg(rs, target) => {
-                if (e2c_dst.read != rs.id) {
+                if (e2c_dst.read != rs.id && f2e_dst.read != rs.id) {
                   if (regfile(rs) >= 0) {
                     pc.write(pc.read + 1)
                   } else {
                     pc.write(pc.read + target)
                   }
                 }
-                e2c_dst.flush()
-                e2c_val.flush()
+                f2e_dst.flush()
+                f2e_val1.flush()
+                f2e_val2.flush()
+                f2e_op.flush()
               }
             }
           }
         }
       }
-      // let a cycle bubble through
+
+      // let the pipeline flush
+      e2c_dst.update()
+      e2c_val.update()
+
+      f2e_dst.update()
+      f2e_val1.update()
+      f2e_val2.update()
+      f2e_op.update()
+
+
       regfile(e2c_dst.read) = e2c_val.read
+      
+      val (e_dst, e_val) = execute(
+        f2e_dst.read,
+        f2e_val1.read,
+        f2e_val2.read,
+        f2e_op.read
+      )  
+
+      e2c_dst.write(e_dst)
+      e2c_val.write(e_val)
+
+      e2c_dst.update()
+      e2c_val.update()
+
+      regfile(e2c_dst.read) = e2c_val.read
+
       regfile
     }
   }
@@ -317,7 +404,7 @@ error:
         run(Fibprog, initRegFile)
       }
     }
-    check("1", snippet.code)
+    exec("1", snippet.code)
   }
 
   test("proc rar hazard") {
@@ -333,7 +420,7 @@ error:
         run(prog, initRegFile)
       }
     }
-    check("rar_hazard", snippet.code)
+    exec("rar_hazard", snippet.code)
   }
 
   test("proc waw hazard") {
@@ -349,7 +436,7 @@ error:
         run(prog, initRegFile)
       }
     }
-    check("waw_hazard", snippet.code)
+    exec("waw_hazard", snippet.code)
   }
 
   test("proc raw hazard") {
@@ -365,7 +452,7 @@ error:
         run(prog, initRegFile)
       }
     }
-    check("raw_hazard", snippet.code)
+    exec("raw_hazard", snippet.code)
   }
 
   test("proc war hazard") {
@@ -381,7 +468,7 @@ error:
         run(prog, initRegFile)
       }
     }
-    check("war_hazard", snippet.code)
+    exec("war_hazard", snippet.code)
   }
 
   test("proc loop") {
@@ -397,7 +484,7 @@ error:
         run(prog, initRegFile)
       }
     }
-    check("loop_hazard", snippet.code)
+    exec("loop_hazard", snippet.code)
   }
 
   test("proc hazard") {
@@ -419,11 +506,11 @@ error:
         run(prog, initRegFile)
       }
     }
-    check("hazard", snippet.code)
+    exec("hazard", snippet.code)
 
   }
 
-  ignore("proc stress") {
+  test("proc stress") {
     // read from file 1.asm and get the program
     val snippet = new DslDriverX[Array[Int], Array[Int]] with Interp {
       val filename = "src/out/1.asm"
