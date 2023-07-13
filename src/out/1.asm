@@ -1,200 +1,126 @@
-add 5 4 5
-addi 1 5 62713
-br 3 15
-br 4 1
-add 2 2 3
-add 4 5 2
-addi 1 4 56767
-addi 2 3 41443
-add 2 1 4
-addi 2 3 14808
-addi 3 5 39342
-add 2 2 3
-add 1 5 5
-addi 3 3 11137
-br 3 15
-add 1 2 3
-addi 5 5 20398
-add 5 4 1
-br 3 4
-add 5 1 3
-addi 1 3 6795
-add 1 5 1
-add 1 3 1
-add 4 1 5
-addi 1 5 50383
-add 2 4 3
-addi 4 3 31112
-add 3 1 2
-add 2 1 3
-addi 3 5 4716
-add 5 3 3
-addi 4 5 23267
-addi 2 1 26811
-addi 1 1 60695
-addi 3 5 37058
-addi 5 5 64047
-addi 1 2 56598
-add 4 3 3
-addi 5 1 54715
-add 4 5 5
-add 3 2 4
-add 3 2 5
-add 5 4 5
-add 4 2 5
-add 2 3 3
-addi 2 5 3733
-add 1 3 4
-br 2 28
-addi 5 5 1720
-addi 3 4 19088
-addi 4 3 29193
-add 3 5 1
-add 4 5 5
-add 3 5 1
-addi 3 3 39134
-addi 1 3 49429
-add 2 4 3
-add 4 5 2
-add 3 1 1
-add 2 5 5
-addi 2 3 15552
-add 4 2 4
-addi 3 2 61604
-addi 3 4 24628
-addi 2 4 18851
-addi 5 4 23506
-addi 3 1 56450
-add 4 2 4
-add 3 3 5
-add 2 3 1
-addi 3 5 53852
-addi 1 1 17318
-br 3 65
-addi 5 5 4824
-add 5 1 1
-add 3 3 4
-addi 5 3 61220
-addi 1 1 57964
-addi 3 1 18917
-add 4 4 3
-add 3 1 5
-addi 4 2 13988
-addi 5 1 47199
-addi 1 2 11054
-add 1 3 4
-addi 2 2 43116
-addi 4 1 39381
-br 2 81
-addi 2 1 20521
-addi 2 5 40832
-addi 2 4 2195
-add 1 5 1
-br 2 76
-addi 2 2 64012
-addi 1 1 12618
-addi 1 1 6051
-addi 2 5 15660
-add 3 5 2
-addi 4 4 30575
-addi 3 5 49117
-add 3 2 2
-add 1 5 5
-add 2 1 1
-addi 2 1 23395
-addi 2 4 11494
-add 1 1 3
-addi 5 1 13329
-add 2 1 1
-add 4 3 5
-addi 5 2 27855
-add 5 3 1
-addi 3 3 34884
-addi 5 5 65222
-addi 2 4 10705
-add 5 1 4
-add 5 5 3
-add 4 4 5
-add 3 4 4
-addi 2 2 40206
-add 2 4 2
-add 1 1 3
-add 2 5 4
-addi 3 3 57438
-add 2 2 4
-add 2 5 1
-addi 1 3 35172
-addi 5 2 2297
-addi 3 5 21717
-add 2 5 3
-addi 2 4 42704
-add 1 3 2
-add 2 2 5
-add 5 2 4
-add 5 2 4
-addi 4 3 6052
-add 4 3 1
-addi 5 3 31793
-addi 3 3 14438
-addi 1 4 25827
-addi 4 3 52830
-br 3 133
-add 3 4 2
-add 5 2 5
-addi 4 4 37332
-add 2 1 2
-add 3 4 4
-addi 4 4 36312
-add 4 5 1
-addi 4 5 56898
-add 2 2 4
-add 2 1 5
-addi 1 1 12458
-addi 2 2 62397
-add 1 2 2
-addi 1 5 15106
-addi 4 1 63370
-addi 4 4 61393
-addi 2 1 60727
-add 2 3 3
-addi 4 1 15460
-addi 5 1 63476
-addi 4 3 14223
-addi 2 3 40893
-add 3 5 2
-add 2 3 4
-addi 1 5 27830
-addi 1 5 37600
-addi 3 3 8905
-add 2 2 3
-addi 5 2 25280
-add 5 5 5
-addi 3 5 243
-addi 4 2 9513
-addi 4 5 48109
+addi 5 5 200
+addi 3 1 1123
+addi 4 1 57342
+addi 1 4 509
+add 3 2 3
+add 4 2 2
+addi 3 1 26314
+add 1 4 1
+add 1 1 2
+addi 5 5 -1
+jumpneg 5 115
+jumpnz 1 4
+addi 2 1 52967
+add 1 4 2
+addi 3 2 58119
 add 1 2 1
-addi 3 1 58740
-addi 1 2 7165
-addi 3 5 4723
-addi 5 3 29322
+add 4 2 3
+add 3 3 3
+addi 5 5 -1
+jumpneg 5 106
+jumpneg 1 -9
+addi 4 2 48111
+add 2 4 3
+addi 2 2 42016
+add 4 1 2
+addi 1 1 23427
+addi 1 4 2649
+addi 3 2 18286
+add 1 3 2
+add 3 2 2
+add 1 1 4
+addi 5 5 -1
+jumpneg 5 93
+jumpneg 1 45
+addi 5 5 -1
+jumpneg 5 90
+jumpneg 4 34
+add 4 4 3
+add 2 1 2
+addi 5 5 -1
+jumpneg 5 85
+jumpnz 4 -33
+addi 5 5 -1
+jumpneg 5 82
+jumpneg 3 57
+addi 3 1 15858
+addi 5 5 -1
+jumpneg 5 78
+jumpneg 4 -43
+add 2 1 2
+add 3 1 3
+addi 5 5 -1
+jumpneg 5 73
+jumpneg 4 -9
+add 1 2 4
+add 1 4 1
+addi 3 1 25189
+addi 1 4 22210
+addi 2 4 52905
+addi 2 3 27588
+add 3 2 4
+addi 2 4 53165
+add 2 3 1
+add 1 4 3
+add 2 2 2
+addi 1 1 53773
+addi 1 1 11095
+add 3 4 2
+addi 3 3 37890
+addi 5 5 -1
+jumpneg 5 55
+jumpnz 3 -39
+addi 3 4 8892
+add 2 2 3
+addi 4 2 32358
 add 3 1 4
-add 5 2 4
-add 5 3 2
-addi 4 5 14949
-add 5 4 2
-add 3 4 5
-add 2 5 3
-addi 2 2 2068
-addi 1 4 27952
-addi 3 2 2953
-br 2 180
-addi 2 1 49216
-addi 3 3 9257
-add 5 2 2
-addi 1 2 34322
-br 5 211
-addi 1 3 63746
-add 1 2 3
-add 5 5 2
-addi 4 2 32931
-add 3 5 4
+add 4 4 2
+addi 2 2 7233
+addi 5 5 -1
+jumpneg 5 46
+jumpneg 1 -41
+add 4 4 4
+addi 2 2 44863
+addi 2 1 11129
+addi 3 2 53244
+addi 1 3 56757
+add 3 1 3
+add 3 1 3
+addi 2 2 58188
+addi 3 3 59542
+addi 4 2 35607
+add 2 1 4
+addi 1 2 28555
+add 1 1 1
+addi 2 1 24464
+add 1 4 4
+addi 2 3 30362
+addi 1 2 42236
+addi 1 3 55877
+addi 3 4 45648
+addi 2 3 18192
+addi 5 5 -1
+jumpneg 5 23
+jumpnz 3 -6
+add 4 3 1
+addi 1 3 61467
+add 2 4 1
+add 3 4 1
+addi 3 3 16760
+addi 4 2 9317
+addi 5 5 -1
+jumpneg 5 14
+jumpnz 4 -51
+addi 5 5 -1
+jumpneg 5 11
+jumpneg 2 -89
+addi 4 4 60943
+addi 1 1 63223
+add 3 1 2
+addi 1 3 8997
+add 3 3 1
+add 1 2 2
+addi 3 1 11546
+add 1 4 1
+addi 4 2 17332
+add 1 3 3

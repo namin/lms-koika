@@ -44,11 +44,36 @@ int* Snippet(int* x0) {
 End of C Generated Code
 *******************************************/
 int main(int argc, char *argv[]) {
-  int regfile[6] = {0, 0, 0, 0, 0, 0};
+  int regfile[7] = {0, 0, 0, 0, 0, 0, 0};
   Snippet(regfile);
-  for (int i = 0; i < 6; i++) {
-    printf("%d ", regfile[i]);
+  if (regfile[0] != 0) {
+    printf("error: regfile[0] = %d, expected 0\n", regfile[0]);
+    return 1;
   }
-  printf("\n");
+  if (regfile[1] != 610) {
+    printf("error: regfile[1] = %d, expected 610\n", regfile[1]);
+    return 1;
+  }
+  if (regfile[2] != 987) {
+    printf("error: regfile[2] = %d, expected 987\n", regfile[2]);
+    return 1;
+  }
+  if (regfile[3] != 987) {
+    printf("error: regfile[3] = %d, expected 987\n", regfile[3]);
+    return 1;
+  }
+  if (regfile[4] != 0) {
+    printf("error: regfile[4] = %d, expected 0\n", regfile[4]);
+    return 1;
+  }
+  if (regfile[5] != 0) {
+    printf("error: regfile[5] = %d, expected 0\n", regfile[5]);
+    return 1;
+  }
+  if (regfile[6] != 0) {
+    printf("error: regfile[6] = %d, expected 0\n", regfile[6]);
+    return 1;
+  }
+  printf("OK\n");
   return 0;
 }

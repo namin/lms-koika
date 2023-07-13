@@ -9,31 +9,54 @@ import random
 # Instructions:
 # addi rd rs1 imm
 # add rd rs1 rs2
-# br rs1 imm
+# jumpnz rs1 imm
+# jumpneg rs1 imm
 
 # this file generates a random sequence of instructions
 # and writes it to a file. USed to stress test the processor
 
+MAXREGS = 5
+MAXDEPTH = 200
+BRANCHLIMIT = 50
+
 
 def genNinst(n: int):
-    ret = []
-    for i in range(n):
-        cmd = random.randint(0, 100)
-        if cmd <= 40:
-            rd = random.randint(1, 5)
-            rs1 = random.randint(1, 5)
-            rs2 = random.randint(1, 5)
-            ret.append(f"add {rd} {rs1} {rs2}")
-        elif cmd <= 95:
-            rd = random.randint(1, 5)
-            rs1 = random.randint(1, 5)
-            imm = random.randint(0, 2**16)
-            ret.append(f"addi {rd} {rs1} {imm}")
-        elif cmd <= 100:
-            rs1 = random.randint(1, 5)
-            imm = random.randint(-20, 20)
-            imm = max(i + imm, 1)
-            ret.append(f"br {rs1} {imm}")
+    ret = [f"addi {MAXREGS} {MAXREGS} {MAXDEPTH}"] + ["nop"] * (n-2)
+
+    branch_prelude = [f"jumpneg {MAXREGS} EXIT",
+                      f"addi {MAXREGS} {MAXREGS} -1"]
+
+    i = 0
+    while i < len(ret):
+        if ret[i] == "nop":
+            cmd = random.randint(0, 100)
+            if cmd <= 30:
+                rd = random.randint(1, MAXREGS-1)
+                rs1 = random.randint(1, MAXREGS-1)
+                rs2 = random.randint(1, MAXREGS-1)
+                ret[i] = f"add {rd} {rs1} {rs2}"
+            elif cmd <= 80:
+                rd = random.randint(1, MAXREGS-1)
+                rs1 = random.randint(1, MAXREGS-1)
+                imm = random.randint(0, 2**16)
+                ret[i] = f"addi {rd} {rs1} {imm}"
+            elif cmd <= 100:
+                # want to stay inside program
+                lower = -i + 1
+                upper = n - i - 1
+                target = random.randint(lower, upper)
+                reg = random.randint(1, MAXREGS-1)
+                branch_type = random.choice(['jumpnz', 'jumpneg'])
+                ret[i] = f"{branch_type} {reg} {target}"
+                for ins in reversed(branch_prelude):
+                    ret.insert(i, ins)
+                    i += 1
+        i += 1
+    # Replace EXIT with the proper imm value
+
+    for i, ins in enumerate(ret):
+        if ins.find("EXIT") != -1:
+            ret[i] = ins.replace("EXIT", str(len(ret) - i - 1))
     return ret
 
 
