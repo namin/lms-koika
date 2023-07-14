@@ -179,32 +179,36 @@ error:
       rf
     }
 
-    def execute(
-        dst: Rep[Int],
-        op1: Rep[Int],
-        op2: Rep[Int],
-        op: Rep[Int]
-    ): (Rep[Int], Rep[Int]) = {
+    def execute(f2e: Map[String, Port[Int]]): (Rep[Int], Rep[Int]) = {
+      val dst = f2e("dst").read
+      val op1 = f2e("val1").read
+      val op2 = f2e("val2").read
+      val op = f2e("op").read
+
       val e_val =
         if (op == AddOp) op1 + op2
         else if (op == EqOp) if (op1 == op2) 1 else 0
-        else if (op == LtOp) if (op1 < op2) 1
+        else if (op == LtOp) if (op1 < op2) 1 else 0
         else 0
-      val e_dst = dst
+      val e_dst = dst 
       (e_dst, e_val)
     }
 
     def run(prog: Program, state: Rep[RegFile]): Rep[RegFile] = {
       val regfile: Rep[RegFile] = state
       var pc: Port[Int] = new Port[Int](0)
+      
+      var f2e: Map[String, Port[Int]] = Map(
+        "dst" -> new Port[Int](0),
+        "val1" -> new Port[Int](0),
+        "val2" -> new Port[Int](0),
+        "op" -> new Port[Int](0)
+      )
 
-      var f2e_dst: Port[Int] = new Port[Int](0)
-      var f2e_val1: Port[Int] = new Port[Int](0)
-      var f2e_val2: Port[Int] = new Port[Int](0)
-      var f2e_op: Port[Int] = new Port[Int](0)
-
-      var e2c_dst: Port[Int] = new Port[Int](0)
-      var e2c_val: Port[Int] = new Port[Int](0)
+      var e2c: Map[String, Port[Int]] = Map(
+        "dst" -> new Port[Int](0),
+        "val" -> new Port[Int](0)
+      )
 
       while (0 <= pc.read && pc.read < prog.length) {
         // The reason why we need this is because the branch instruction could
@@ -213,27 +217,22 @@ error:
         pc.update()
 
         // pipeline update
-        e2c_dst.update()
-        e2c_val.update()
+        e2c("dst").update()
+        e2c("val").update()
 
-        f2e_dst.update()
-        f2e_val1.update()
-        f2e_val2.update()
-        f2e_op.update()
+        f2e("dst").update()
+        f2e("val1").update()
+        f2e("val2").update()
+        f2e("op").update()
 
         // Commit stage
-        regfile(e2c_dst.read) = e2c_val.read
+        regfile(e2c("dst").read) = e2c("val").read
 
         // Execute stage
-        val (e_dst, e_val) = execute(
-          f2e_dst.read,
-          f2e_val1.read,
-          f2e_val2.read,
-          f2e_op.read
-        )
+        val (e_dst, e_val) = execute(f2e)
 
-        e2c_dst.write(e_dst)
-        e2c_val.write(e_val)
+        e2c("dst").write(e_dst)
+        e2c("val").write(e_val)
 
         // Fetch stage
 
@@ -242,68 +241,56 @@ error:
             prog(i) match {
               case Add(rd, rs1, rs2) => {
                 if (
-                  (!e2c_dst.isAmong(rd, rs1, rs2) || e2c_dst.isDefault) &&
-                  (!f2e_dst.isAmong(rd, rs1, rs2) || f2e_dst.isDefault)
+                  (!e2c("dst").isAmong(rd, rs1, rs2) || e2c("dst").isDefault) &&
+                  (!f2e("dst").isAmong(rd, rs1, rs2) || f2e("dst").isDefault)
                 ) {
-                  f2e_dst.write(rd)
-                  f2e_val1.write(regfile(rs1))
-                  f2e_val2.write(regfile(rs2))
-                  f2e_op.write(AddOp)
+                  f2e("dst").write(rd)
+                  f2e("val1").write(regfile(rs1))
+                  f2e("val2").write(regfile(rs2))
+                  f2e("op").write(AddOp)
                   pc.write(pc.read + 1)
                 } else {
                   // stall
-                  f2e_dst.flush()
-                  f2e_val1.flush()
-                  f2e_val2.flush()
-                  f2e_op.flush()
+                  f2e.foreach { case (k, v) => v.flush() }
                 }
               }
 
               case Addi(rd, rs1, imm) => {
                 if (
-                  (!e2c_dst.isAmong(rd, rs1) || e2c_dst.isDefault) &&
-                  (!f2e_dst.isAmong(rd, rs1) || f2e_dst.isDefault)
+                  (!e2c("dst").isAmong(rd, rs1) || e2c("dst").isDefault) &&
+                  (!f2e("dst").isAmong(rd, rs1) || f2e("dst").isDefault)
                 ) {
-                  f2e_dst.write(rd)
-                  f2e_val1.write(regfile(rs1))
-                  f2e_val2.write(imm)
-                  f2e_op.write(AddOp)
+                  f2e("dst").write(rd)
+                  f2e("val1").write(regfile(rs1))
+                  f2e("val2").write(imm)
+                  f2e("op").write(AddOp)
                   pc.write(pc.read + 1)
                 } else {
                   // stall
-                  f2e_dst.flush()
-                  f2e_val1.flush()
-                  f2e_val2.flush()
-                  f2e_op.flush()
+                  f2e.foreach { case (k, v) => v.flush() }
                 }
               }
 
               case JumpNZ(rs, target) => {
-                if (e2c_dst.read != rs.id && f2e_dst.read != rs.id) {
+                if (e2c("dst").read != rs.id && f2e("dst").read != rs.id) {
                   if (regfile(rs) == 0) {
                     pc.write(pc.read + 1)
                   } else {
                     pc.write(pc.read + target)
                   }
                 }
-                f2e_dst.flush()
-                f2e_val1.flush()
-                f2e_val2.flush()
-                f2e_op.flush()
+                f2e.foreach { case (k, v) => v.flush() }
 
               }
               case JumpNeg(rs, target) => {
-                if (e2c_dst.read != rs.id && f2e_dst.read != rs.id) {
+                if (e2c("dst").read != rs.id && f2e("dst").read != rs.id) {
                   if (regfile(rs) >= 0) {
                     pc.write(pc.read + 1)
                   } else {
                     pc.write(pc.read + target)
                   }
                 }
-                f2e_dst.flush()
-                f2e_val1.flush()
-                f2e_val2.flush()
-                f2e_op.flush()
+                f2e.foreach { case (k, v) => v.flush() }
               }
             }
           }
@@ -311,31 +298,26 @@ error:
       }
 
       // let the pipeline flush
-      e2c_dst.update()
-      e2c_val.update()
+      e2c("dst").update()
+      e2c("val").update()
 
-      f2e_dst.update()
-      f2e_val1.update()
-      f2e_val2.update()
-      f2e_op.update()
+      f2e("dst").update()
+      f2e("val1").update()
+      f2e("val2").update()
+      f2e("op").update()
 
 
-      regfile(e2c_dst.read) = e2c_val.read
+      regfile(e2c("dst").read) = e2c("val").read
       
-      val (e_dst, e_val) = execute(
-        f2e_dst.read,
-        f2e_val1.read,
-        f2e_val2.read,
-        f2e_op.read
-      )  
+      val (e_dst, e_val) = execute(f2e)  
 
-      e2c_dst.write(e_dst)
-      e2c_val.write(e_val)
+      e2c("dst").write(e_dst)
+      e2c("val").write(e_val)
 
-      e2c_dst.update()
-      e2c_val.update()
+      e2c("dst").update()
+      e2c("val").update()
 
-      regfile(e2c_dst.read) = e2c_val.read
+      regfile(e2c("dst").read) = e2c("val").read
 
       regfile
     }
