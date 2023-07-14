@@ -117,11 +117,13 @@ error:
           case None    => a == b
         }
 
+
       def read: Rep[T] = readVar(readport)
 
       def write(d: Rep[T]): Rep[Unit] = writeport = d
 
       def flush(): Rep[Unit] = writeport = init
+      def freeze(): Rep[Unit] = ()
 
       def update(): Rep[Unit] = readport = writeport
 
@@ -190,7 +192,10 @@ error:
         else if (op == EqOp) if (op1 == op2) 1 else 0
         else if (op == LtOp) if (op1 < op2) 1 else 0
         else 0
+
       val e_dst = dst 
+
+
       (e_dst, e_val)
     }
 
@@ -202,7 +207,9 @@ error:
         "dst" -> new Port[Int](0),
         "val1" -> new Port[Int](0),
         "val2" -> new Port[Int](0),
-        "op" -> new Port[Int](0)
+        "op" -> new Port[Int](0),
+        "pc" -> new Port[Int](0)
+        
       )
 
       var e2c: Map[String, Port[Int]] = Map(
@@ -211,10 +218,8 @@ error:
       )
 
       while (0 <= pc.read && pc.read < prog.length) {
-        // The reason why we need this is because the branch instruction could
-        // stall in E stage, waiting on C stage to update rs.
-        // So pc should stay the same until the branch is executed.
-        pc.update()
+        pc.update() 
+
 
         // pipeline update
         e2c("dst").update()
@@ -227,7 +232,7 @@ error:
 
         // Commit stage
         regfile(e2c("dst").read) = e2c("val").read
-
+        
         // Execute stage
         val (e_dst, e_val) = execute(f2e)
 
@@ -251,7 +256,7 @@ error:
                   pc.write(pc.read + 1)
                 } else {
                   // stall
-                  f2e.foreach { case (k, v) => v.flush() }
+                  f2e.foreach { case ("pc", p) => p.freeze(); case (_, p) => p.flush() }
                 }
               }
 
@@ -267,7 +272,7 @@ error:
                   pc.write(pc.read + 1)
                 } else {
                   // stall
-                  f2e.foreach { case (k, v) => v.flush() }
+                  f2e.foreach { case ("pc", p) => p.freeze(); case (_, p) => p.flush() }
                 }
               }
 
@@ -279,7 +284,7 @@ error:
                     pc.write(pc.read + target)
                   }
                 }
-                f2e.foreach { case (k, v) => v.flush() }
+                f2e.foreach { case ("pc", p) => p.freeze(); case (_, p) => p.flush() }
 
               }
               case JumpNeg(rs, target) => {
@@ -290,7 +295,7 @@ error:
                     pc.write(pc.read + target)
                   }
                 }
-                f2e.foreach { case (k, v) => v.flush() }
+                f2e.foreach { case ("pc", p) => p.freeze(); case (_, p) => p.flush() }
               }
             }
           }
