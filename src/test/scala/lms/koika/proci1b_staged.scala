@@ -85,6 +85,9 @@ error:
     val EqOp = 1
     val LtOp = 2
 
+    val BrEqOp = -1
+    val BrLtOp = -2
+
     type Program = List[Instruction]
     type RegFile = Array[Int]
 
@@ -102,7 +105,6 @@ error:
     implicit def reg2int(r: Reg): Int = r.id
     implicit def reg2rep(r: Reg): Rep[Int] = unit(r.id)
 
-
     class Port[T: Manifest](
         init: T,
         customEqual: Option[(Rep[T], Rep[T]) => Rep[Boolean]] = None
@@ -116,7 +118,6 @@ error:
           case Some(f) => f(a, b)
           case None    => a == b
         }
-
 
       def read: Rep[T] = readVar(readport)
 
@@ -181,7 +182,9 @@ error:
       rf
     }
 
-    def execute(f2e: Map[String, Port[Int]]): (Rep[Int], Rep[Int]) = {
+    def execute(
+        f2e: Map[String, Port[Int]]
+    ): (Rep[Int], Rep[Int], Rep[Boolean], Rep[Int]) = {
       val dst = f2e("dst").read
       val op1 = f2e("val1").read
       val op2 = f2e("val2").read
@@ -193,23 +196,40 @@ error:
         else if (op == LtOp) if (op1 < op2) 1 else 0
         else 0
 
-      val e_dst = dst 
+      val e_dst = dst
 
+      val pred = f2e("bpred").read
+      val e_annul =
+        if (e_val == 0) pred == 1
+        else if (e_val == 1) pred == 2
+        else false
 
-      (e_dst, e_val)
+      val delta = f2e("bdelta").read
+
+      val e_nextpc =
+        if (e_val == 0) f2e("pc").read + 1
+        else if (e_val == 1) f2e("pc").read + delta
+        else f2e("pc").read + 1
+
+      (e_dst, e_val, e_annul, e_nextpc)
     }
+
+    def BTB(pc: Rep[Int]): Rep[Int] = pc + 1
+
+    def BPredict(pc: Rep[Int]): Rep[Boolean] = false
 
     def run(prog: Program, state: Rep[RegFile]): Rep[RegFile] = {
       val regfile: Rep[RegFile] = state
-      var pc: Port[Int] = new Port[Int](0)
-      
+
       var f2e: Map[String, Port[Int]] = Map(
         "dst" -> new Port[Int](0),
         "val1" -> new Port[Int](0),
         "val2" -> new Port[Int](0),
         "op" -> new Port[Int](0),
+        "bpred" -> new Port[Int](0), // branch prediction
+        // 0: not a branch, 1: branch taken, 2: branch not taken
+        "bdelta" -> new Port[Int](0),
         "pc" -> new Port[Int](0)
-        
       )
 
       var e2c: Map[String, Port[Int]] = Map(
@@ -217,89 +237,136 @@ error:
         "val" -> new Port[Int](0)
       )
 
-      while (0 <= pc.read && pc.read < prog.length) {
-        pc.update() 
-
+      while (0 <= f2e("pc").read && f2e("pc").read < prog.length) {
 
         // pipeline update
-        e2c("dst").update()
-        e2c("val").update()
-
-        f2e("dst").update()
-        f2e("val1").update()
-        f2e("val2").update()
-        f2e("op").update()
+        f2e.foreach { case (_, port) => port.update() }
+        e2c.foreach { case (_, port) => port.update() }
 
         // Commit stage
         regfile(e2c("dst").read) = e2c("val").read
-        
+
         // Execute stage
-        val (e_dst, e_val) = execute(f2e)
+        val (e_dst, e_val, e_annul, e_nextpc) = execute(f2e)
 
         e2c("dst").write(e_dst)
         e2c("val").write(e_val)
 
         // Fetch stage
 
+        val pc = f2e("pc").read
+        val nextpc = BTB(pc)
+        val predict = BPredict(pc)
+
         for (i <- (0 until prog.length): Range) {
-          if (i == pc.read) {
+          if (i == pc) {
             prog(i) match {
               case Add(rd, rs1, rs2) => {
-                if (
-                  (!e2c("dst").isAmong(rd, rs1, rs2) || e2c("dst").isDefault) &&
-                  (!f2e("dst").isAmong(rd, rs1, rs2) || f2e("dst").isDefault)
-                ) {
+
+                val stall = !((!e2c("dst").isAmong(rd, rs1, rs2)
+                  || e2c("dst").isDefault)
+                  && (!f2e("dst").isAmong(rd, rs1, rs2)
+                    || f2e("dst").isDefault))
+
+                if (e_annul) {
+                  f2e.foreach {
+                    case ("pc", p) => p.write(e_nextpc);
+                    case (_, p)    => p.flush()
+                  }
+                } else if (stall) {
+                  // stall
+                  f2e.foreach {
+                    case ("pc", p) => p.freeze(); case (_, p) => p.flush()
+                  }
+                } else {
                   f2e("dst").write(rd)
                   f2e("val1").write(regfile(rs1))
                   f2e("val2").write(regfile(rs2))
                   f2e("op").write(AddOp)
-                  pc.write(pc.read + 1)
-                } else {
-                  // stall
-                  f2e.foreach { case ("pc", p) => p.freeze(); case (_, p) => p.flush() }
+                  f2e("bpred").write(0)
+                  f2e("bdelta").write(1)
+                  f2e("pc").write(nextpc)
                 }
               }
 
               case Addi(rd, rs1, imm) => {
-                if (
-                  (!e2c("dst").isAmong(rd, rs1) || e2c("dst").isDefault) &&
-                  (!f2e("dst").isAmong(rd, rs1) || f2e("dst").isDefault)
-                ) {
+                val stall = !((!e2c("dst").isAmong(rd, rs1)
+                  || e2c("dst").isDefault)
+                  && (!f2e("dst").isAmong(rd, rs1)
+                    || f2e("dst").isDefault))
+
+                if (e_annul) {
+                  f2e.foreach {
+                    case ("pc", p) => p.write(e_nextpc);
+                    case (_, p)    => p.flush()
+                  }
+                } else if (stall) {
+                  // stall
+                  f2e.foreach {
+                    case ("pc", p) => p.freeze(); case (_, p) => p.flush()
+                  }
+                } else {
                   f2e("dst").write(rd)
                   f2e("val1").write(regfile(rs1))
                   f2e("val2").write(imm)
                   f2e("op").write(AddOp)
-                  pc.write(pc.read + 1)
-                } else {
-                  // stall
-                  f2e.foreach { case ("pc", p) => p.freeze(); case (_, p) => p.flush() }
+                  f2e("bpred").write(0)
+                  f2e("bdelta").write(1)
+                  f2e("pc").write(nextpc)
                 }
               }
 
               case JumpNZ(rs, target) => {
-                if (e2c("dst").read != rs.id && f2e("dst").read != rs.id) {
-                  if (regfile(rs) == 0) {
-                    pc.write(pc.read + 1)
-                  } else {
-                    pc.write(pc.read + target)
+                val stall =
+                  !(e2c("dst").read != rs.id && f2e("dst").read != rs.id)
+
+                if (e_annul) {
+                  f2e.foreach {
+                    case ("pc", p) => p.write(e_nextpc);
+                    case (_, p)    => p.flush()
                   }
+                } else if (stall) {
+                  f2e.foreach {
+                    case ("pc", p) => p.freeze(); case (_, p) => p.flush()
+                  }
+                } else {
+                  f2e("dst").write(ZERO)
+                  f2e("val1").write(regfile(rs))
+                  f2e("val2").write(0)
+                  f2e("op").write(EqOp)
+                  f2e("bpred").write(2)
+                  f2e("bdelta").write(target)
+                  f2e("pc").write(nextpc)
                 }
-                f2e.foreach { case ("pc", p) => p.freeze(); case (_, p) => p.flush() }
 
               }
               case JumpNeg(rs, target) => {
-                if (e2c("dst").read != rs.id && f2e("dst").read != rs.id) {
-                  if (regfile(rs) >= 0) {
-                    pc.write(pc.read + 1)
-                  } else {
-                    pc.write(pc.read + target)
+                val stall =
+                  !(e2c("dst").read != rs.id && f2e("dst").read != rs.id)
+
+                if (e_annul) {
+                  f2e.foreach {
+                    case ("pc", p) => p.write(e_nextpc);
+                    case (_, p)    => p.flush()
                   }
+                } else if (stall) {
+                  f2e.foreach {
+                    case ("pc", p) => p.freeze(); case (_, p) => p.flush()
+                  }
+                } else {
+                  f2e("dst").write(ZERO)
+                  f2e("val1").write(regfile(rs))
+                  f2e("val2").write(0)
+                  f2e("op").write(LtOp)
+                  f2e("bpred").write(2)
+                  f2e("bdelta").write(target)
+                  f2e("pc").write(nextpc)
                 }
-                f2e.foreach { case ("pc", p) => p.freeze(); case (_, p) => p.flush() }
               }
             }
           }
         }
+
       }
 
       // let the pipeline flush
@@ -311,10 +378,9 @@ error:
       f2e("val2").update()
       f2e("op").update()
 
-
       regfile(e2c("dst").read) = e2c("val").read
-      
-      val (e_dst, e_val) = execute(f2e)  
+
+      val (e_dst, e_val, e_annul, e_nextpc) = execute(f2e)
 
       e2c("dst").write(e_dst)
       e2c("val").write(e_val)
