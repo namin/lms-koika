@@ -145,7 +145,7 @@ error:
       def write(d: Rep[T]): Rep[Unit] = writeport = d
 
       def flush(): Rep[Unit] = writeport = init
-      def freeze(): Rep[Unit] = ()
+      def freeze(): Rep[Unit] = writeport = readport
 
       def update(): Rep[Unit] = readport = writeport
 
@@ -231,8 +231,8 @@ error:
 
       val e_nextpc =
         if (e_val == 0) f2e("epc").read + 1
-        else if (e_val == 1) f2e("epc").read + delta 
-        else f2e("epc").read 
+        else if (e_val == 1) f2e("epc").read + delta
+        else f2e("epc").read
 
       (e_dst, e_val, e_annul, e_nextpc)
     }
@@ -260,6 +260,7 @@ error:
         "val" -> new Port[Int](0)
       )
 
+
       while (
         (0 <= f2e("pc").read && f2e("pc").read < prog.length)
         || (f2e - "pc")
@@ -272,7 +273,8 @@ error:
         e2c.foreach { case (_, port) => port.update() }
 
         // Commit stage
-        regfile(e2c("dst").read) = e2c("val").read
+        if (!e2c("dst").isAmong(0))
+          regfile(e2c("dst").read) = e2c("val").read
 
         // Execute stage
         val (e_dst, e_val, e_annul, e_nextpc) = execute(f2e)
@@ -286,11 +288,12 @@ error:
         val nextpc = BTB(pc)
         val predict = BPredict(pc)
 
+        var stall = false
+
         if (prog.length == pc) {
           f2e.foreach {
             case ("pc", p) => p.freeze(); case (_, p) => p.flush()
           }
-
         }
 
         for (i <- (0 until prog.length): Range) {
@@ -298,11 +301,11 @@ error:
             prog(i) match {
               case Add(rd, rs1, rs2) => {
 
-                val stall = !((!e2c("dst").isAmong(rd, rs1, rs2)
+                stall = !((!e2c("dst").isAmong(rd, rs1, rs2)
                   || e2c("dst").isDefault)
                   && (!f2e("dst").isAmong(rd, rs1, rs2)
                     || f2e("dst").isDefault))
-
+                
                 if (e_annul) {
                   f2e.foreach {
                     case ("pc", p) => p.write(e_nextpc);
@@ -326,7 +329,7 @@ error:
               }
 
               case Addi(rd, rs1, imm) => {
-                val stall = !((!e2c("dst").isAmong(rd, rs1)
+                stall = !((!e2c("dst").isAmong(rd, rs1)
                   || e2c("dst").isDefault)
                   && (!f2e("dst").isAmong(rd, rs1)
                     || f2e("dst").isDefault))
@@ -354,7 +357,7 @@ error:
               }
 
               case JumpNZ(rs, target) => {
-                val stall =
+                stall =
                   !(e2c("dst").read != rs.id && f2e("dst").read != rs.id)
 
                 if (e_annul) {
@@ -379,7 +382,7 @@ error:
 
               }
               case JumpNeg(rs, target) => {
-                val stall =
+                stall =
                   !(e2c("dst").read != rs.id && f2e("dst").read != rs.id)
 
                 if (e_annul) {
@@ -406,29 +409,19 @@ error:
           }
         }
 
+        if (e_annul) {
+          f2e.foreach {
+            case ("pc", p) => p.write(e_nextpc);
+            case (_, p)    => p.flush()
+          }
+        } else if (stall) {
+          // stall
+          f2e.foreach {
+            case ("pc", p) => p.freeze()
+            ; case (_, p) => p.flush()
+          }
+        } 
       }
-      /*
-      // let the pipeline flush
-      e2c("dst").update()
-      e2c("val").update()
-
-      f2e("dst").update()
-      f2e("val1").update()
-      f2e("val2").update()
-      f2e("op").update()
-
-      regfile(e2c("dst").read) = e2c("val").read
-
-      val (e_dst, e_val, e_annul, e_nextpc) = execute(f2e)
-
-      e2c("dst").write(e_dst)
-      e2c("val").write(e_val)
-
-      e2c("dst").update()
-      e2c("val").update()
-
-      regfile(e2c("dst").read) = e2c("val").read
-      */
       regfile
     }
   }
@@ -487,7 +480,8 @@ error:
         Add(F_n_1, F_n, ZERO),
         Add(F_n, Temp, ZERO),
         Addi(N, N, -1),
-        JumpNZ(N, -4)
+        JumpNZ(N, -4),
+        NOP // TODO: Last instruction Jump is buggy
       )
       val expected = expectedResult(Fibprog)
       override val main = constructMain(expected)
