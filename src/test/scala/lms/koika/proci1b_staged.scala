@@ -81,12 +81,33 @@ error:
     case class JumpNZ(rs: Reg, imm: Int) extends Instruction
     case class JumpNeg(rs: Reg, imm: Int) extends Instruction
 
-    val AddOp = 0
-    val EqOp = 1
-    val LtOp = 2
+    var _i: Int = 137000
+    def iota: Int = {
+      _i += 1
+      _i
+    }
 
-    val BrEqOp = -1
-    val BrLtOp = -2
+    val AddOp = iota
+    val EqOp = iota
+    val NeqOp = iota
+    val LtOp = iota
+    val GtOp = iota
+    val LeOp = iota
+    val GeOp = iota
+
+    val BrEqOp = iota
+    val BrLtOp = iota
+
+    val BranchTaken = iota
+    val BranchNotTaken = iota
+    val NotBranch = iota
+
+    // Type black magic
+    type ¬[A] = A => Nothing
+    type ∨[T, U] = ¬[¬[T] with ¬[U]]
+    type ¬¬[A] = ¬[¬[A]]
+    type |∨|[T, U] = { type λ[X] = ¬¬[X] <:< (T ∨ U) }
+    // see https://stackoverflow.com/questions/3508077/how-to-define-type-disjunction-union-types
 
     type Program = List[Instruction]
     type RegFile = Array[Int]
@@ -193,6 +214,7 @@ error:
       val e_val =
         if (op == AddOp) op1 + op2
         else if (op == EqOp) if (op1 == op2) 1 else 0
+        else if (op == NeqOp) if (op1 != op2) 1 else 0
         else if (op == LtOp) if (op1 < op2) 1 else 0
         else 0
 
@@ -200,16 +222,17 @@ error:
 
       val pred = f2e("bpred").read
       val e_annul =
-        if (e_val == 0) pred == 1
-        else if (e_val == 1) pred == 2
+        if (pred == NotBranch) false
+        else if (e_val == 0) pred == BranchTaken
+        else if (e_val == 1) pred == BranchNotTaken
         else false
 
       val delta = f2e("bdelta").read
 
       val e_nextpc =
-        if (e_val == 0) f2e("pc").read + 1
-        else if (e_val == 1) f2e("pc").read + delta
-        else f2e("pc").read + 1
+        if (e_val == 0) f2e("epc").read + 1
+        else if (e_val == 1) f2e("epc").read + delta 
+        else f2e("epc").read 
 
       (e_dst, e_val, e_annul, e_nextpc)
     }
@@ -226,10 +249,10 @@ error:
         "val1" -> new Port[Int](0),
         "val2" -> new Port[Int](0),
         "op" -> new Port[Int](0),
-        "bpred" -> new Port[Int](0), // branch prediction
-        // 0: not a branch, 1: branch taken, 2: branch not taken
+        "bpred" -> new Port[Int](NotBranch),
         "bdelta" -> new Port[Int](0),
-        "pc" -> new Port[Int](0)
+        "pc" -> new Port[Int](0),
+        "epc" -> new Port[Int](0)
       )
 
       var e2c: Map[String, Port[Int]] = Map(
@@ -237,7 +260,12 @@ error:
         "val" -> new Port[Int](0)
       )
 
-      while (0 <= f2e("pc").read && f2e("pc").read < prog.length) {
+      while (
+        (0 <= f2e("pc").read && f2e("pc").read < prog.length)
+        || (f2e - "pc")
+          .foldLeft(unit(false))((acc, kv) => acc || !kv._2.isDefault)
+        || e2c.foldLeft(unit(false))((acc, kv) => acc || !kv._2.isDefault)
+      ) {
 
         // pipeline update
         f2e.foreach { case (_, port) => port.update() }
@@ -257,6 +285,13 @@ error:
         val pc = f2e("pc").read
         val nextpc = BTB(pc)
         val predict = BPredict(pc)
+
+        if (prog.length == pc) {
+          f2e.foreach {
+            case ("pc", p) => p.freeze(); case (_, p) => p.flush()
+          }
+
+        }
 
         for (i <- (0 until prog.length): Range) {
           if (i == pc) {
@@ -283,9 +318,10 @@ error:
                   f2e("val1").write(regfile(rs1))
                   f2e("val2").write(regfile(rs2))
                   f2e("op").write(AddOp)
-                  f2e("bpred").write(0)
+                  f2e("bpred").write(NotBranch)
                   f2e("bdelta").write(1)
                   f2e("pc").write(nextpc)
+                  f2e("epc").write(pc)
                 }
               }
 
@@ -310,9 +346,10 @@ error:
                   f2e("val1").write(regfile(rs1))
                   f2e("val2").write(imm)
                   f2e("op").write(AddOp)
-                  f2e("bpred").write(0)
+                  f2e("bpred").write(NotBranch)
                   f2e("bdelta").write(1)
                   f2e("pc").write(nextpc)
+                  f2e("epc").write(pc)
                 }
               }
 
@@ -333,10 +370,11 @@ error:
                   f2e("dst").write(ZERO)
                   f2e("val1").write(regfile(rs))
                   f2e("val2").write(0)
-                  f2e("op").write(EqOp)
-                  f2e("bpred").write(2)
+                  f2e("op").write(NeqOp)
+                  f2e("bpred").write(BranchNotTaken)
                   f2e("bdelta").write(target)
                   f2e("pc").write(nextpc)
+                  f2e("epc").write(pc)
                 }
 
               }
@@ -358,9 +396,10 @@ error:
                   f2e("val1").write(regfile(rs))
                   f2e("val2").write(0)
                   f2e("op").write(LtOp)
-                  f2e("bpred").write(2)
+                  f2e("bpred").write(BranchNotTaken)
                   f2e("bdelta").write(target)
                   f2e("pc").write(nextpc)
+                  f2e("epc").write(pc)
                 }
               }
             }
@@ -368,7 +407,7 @@ error:
         }
 
       }
-
+      /*
       // let the pipeline flush
       e2c("dst").update()
       e2c("val").update()
@@ -389,7 +428,7 @@ error:
       e2c("val").update()
 
       regfile(e2c("dst").read) = e2c("val").read
-
+      */
       regfile
     }
   }
@@ -524,12 +563,32 @@ error:
     exec("war_hazard", snippet.code)
   }
 
+  test("proc annul") {
+    val snippet = new DslDriverX[Array[Int], Array[Int]] with Interp {
+      val prog = List(
+        Addi(A0, ZERO, 1),
+        JumpNZ(A0, 2),
+        Addi(A1, ZERO, 2),
+        Addi(A2, ZERO, 3)
+      )
+      val expected = expectedResult(prog)
+      override val main = constructMain(expected)
+      def snippet(initRegFile: Rep[RegFile]) = {
+        run(prog, initRegFile)
+      }
+    }
+    exec("annul", snippet.code)
+  }
+
   test("proc loop") {
     val snippet = new DslDriverX[Array[Int], Array[Int]] with Interp {
       val prog = List(
         Addi(A0, ZERO, 3),
         Addi(A0, A0, -1),
-        JumpNZ(A0, -1)
+        JumpNZ(A0, -1),
+        NOP,
+        NOP,
+        NOP
       )
       val expected = expectedResult(prog)
       override val main = constructMain(expected)
