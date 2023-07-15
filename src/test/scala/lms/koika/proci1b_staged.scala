@@ -8,60 +8,82 @@ import lms.macros.SourceContext
 class StagedProcInterp1bPC extends TutorialFunSuite {
   val under = "proci1b_staged_"
 
+  val REGFILE_SIZE:Int = 7
   val regfile_main = """
-int main(int argc, char *argv[]) {
-  int regfile[7] = {0, 0, 0, 0, 0, 0, 0};
-  Snippet(regfile);
-  for (int i = 0; i < 6; i++) {
-    printf("%d ", regfile[i]);
-  }
-  printf("\n");
-  return 0;
-}
-"""
+    |int main(int argc, char *argv[]) {
+    |  int regfile[7] = {0, 0, 0, 0, 0, 0, 0};
+    |  Snippet(regfile);
+    |  for (int i = 0; i < 6; i++) {
+    |    printf("%d ", regfile[i]);
+    |  }
+    |  printf("\n");
+    |  return 0;
+    |}
+    |""".stripMargin
 
   def constructMain(expected: Array[Int]): String = {
     var ret = s"""
-// cc file.c for execution
-// cbmc -DCBMC file.c for verification
-#ifndef CBMC
-#define __CPROVER_assert(b,s) 0
-#endif
-int main(int argc, char *argv[]) {
-  int regfile[7] = {0, 0, 0, 0, 0, 0, 0};
-  Snippet(regfile);
-"""
+    |// cc file.c for execution
+    |// cbmc -DCBMC file.c for verification
+    |#ifndef CBMC
+    |#define __CPROVER_assert(b,s) 0
+    |#endif
+    |
+    |int bounded(int low, int high) {
+    |  int x = nondet_uint();
+    |  if (x < low) {
+    |    x = low;
+    |  }
+    |  if (x > high) {
+    |    x = high;
+    |  }
+    |  return x;
+    |}
+    |
+    |int main(int argc, char *argv[]) {
+    |  int regfile[11] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+    |  int regfile[1] = bounded(0, 10);
+    |  int c1 = Snippet(regfile);
+    |  int regfile2[11] = {0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 4};
+    |  int regfile2[1] = bounded(0, 10);
+    |  int c2 = Snippet(regfile2);
+    |  __CPROVER_assert(c1 == c2, "timing leak");
+    |""".stripMargin
+
+
     var printexpected = s"""
-  printf("\\nexpected:\\n");
-  printf(""""
+    |  printf("\\nexpected:\\n");
+    |  printf(""""
     for (i <- 0 until expected.length) {
       printexpected += s"""${expected(i)} """
     }
     printexpected += s""" ");
-"""
+    |""".stripMargin
+
     for (i <- 0 until expected.length) {
       ret += s"""
-  __CPROVER_assert(regfile[$i]==${expected(i)}, "failure $i");
-  if (regfile[$i] != ${expected(i)}) {
-    printf("error: regfile[$i] = %d, expected ${expected(i)}\\n", regfile[$i]);
-    goto error;
-  }
-"""
+    |  __CPROVER_assert(regfile[$i]==${expected(i)}, "failure $i");
+    |  if (regfile[$i] != ${expected(i)}) {
+    |    printf("error: regfile[$i] = %d, expected ${expected(
+                 i
+               )}\\n", regfile[$i]);
+    |    goto error;
+    |  }
+    |""".stripMargin
     }
     ret += s"""
-  printf("OK\\n");
-  return 0;
-error:
-  printf("\\nRegfile:\\n");
-  for (int i = 0; i < 6; i++) {
-    printf("%d ", regfile[i]);
-  }
-  ${printexpected}
-  printf("\\n\\nFAILED\\n");
-  return 1;
-
-}
-"""
+    |  printf("OK\\n");
+    |  return 0;
+    |error:
+    |  printf("\\nRegfile:\\n");
+    |  for (int i = 0; i < 6; i++) {
+    |    printf("%d ", regfile[i]);
+    |  }
+    |  ${printexpected}
+    |  printf("\\n\\nFAILED\\n");
+    |  return 1;
+    |}
+    |""".stripMargin
     ret
   }
 
@@ -78,25 +100,30 @@ error:
     abstract sealed class Instruction
     case class Add(rd: Reg, rs1: Reg, rs2: Reg) extends Instruction
     case class Addi(rd: Reg, rs1: Reg, imm: Int) extends Instruction
+    case class Mul(rd: Reg, rs1: Reg, rs2: Reg) extends Instruction
+    case class Sub(rd: Reg, rs1: Reg, rs2: Reg) extends Instruction
     case class JumpNZ(rs: Reg, imm: Int) extends Instruction
     case class JumpNeg(rs: Reg, imm: Int) extends Instruction
+    // case class Load(rd: Reg, rs1: Reg, imm: Int) extends Instruction
+    // case class Store(rs1: Reg, rs2: Reg, imm: Int) extends Instruction
 
-    var _i: Int = 137000
+    // workaround for enums
+    var __i_enum: Int = 137000
     def iota: Int = {
-      _i += 1
-      _i
+      __i_enum += 1
+      __i_enum
     }
 
     val AddOp = iota
+    val MulOp = iota
+    val SubOp = iota
+
     val EqOp = iota
     val NeqOp = iota
     val LtOp = iota
     val GtOp = iota
     val LeOp = iota
     val GeOp = iota
-
-    val BrEqOp = iota
-    val BrLtOp = iota
 
     val BranchTaken = iota
     val BranchNotTaken = iota
@@ -111,6 +138,7 @@ error:
 
     type Program = List[Instruction]
     type RegFile = Array[Int]
+    
 
     case class Reg(id: Int)
     val ZERO: Reg = Reg(0)
@@ -120,6 +148,10 @@ error:
     val A3: Reg = Reg(4)
     val A4: Reg = Reg(5)
     val A5: Reg = Reg(6)
+    val SECRET1: Reg = Reg(7)
+    val SECRET2: Reg = Reg(8)
+    val SECRET3: Reg = Reg(9)
+    val SECRET4: Reg = Reg(10)
 
     val NOP = Addi(ZERO, ZERO, 0)
 
@@ -178,7 +210,8 @@ error:
     }
 
     def expectedResult(prog: Program): Array[Int] = {
-      var rf: Array[Int] = List(0, 0, 0, 0, 0, 0, 0).toArray
+      var rf: Array[Int] = new Array[Int](REGFILE_SIZE + 4)
+
       var i: Int = 0
       while (i < prog.length) {
         prog(i) match {
@@ -188,6 +221,14 @@ error:
           }
           case Addi(rd, rs1, imm) => {
             rf(rd) = rf(rs1) + imm
+            i = i + 1
+          }
+          case Mul(rd, rs1, rs2) => {
+            rf(rd) = rf(rs1) * rf(rs2)
+            i = i + 1
+          }
+          case Sub(rd, rs1, rs2) => {
+            rf(rd) = rf(rs1) - rf(rs2)
             i = i + 1
           }
           case JumpNZ(rs, target) => {
@@ -203,55 +244,72 @@ error:
       rf
     }
 
-    def execute(
-        f2e: Map[String, Port[Int]]
-    ): (Rep[Int], Rep[Int], Rep[Boolean], Rep[Int]) = {
-      val dst = f2e("dst").read
-      val op1 = f2e("val1").read
-      val op2 = f2e("val2").read
-      val op = f2e("op").read
+    def run(prog: Program, state: Rep[RegFile]): Rep[Int] = {
 
-      val e_val =
-        if (op == AddOp) op1 + op2
-        else if (op == EqOp) if (op1 == op2) 1 else 0
-        else if (op == NeqOp) if (op1 != op2) 1 else 0
-        else if (op == LtOp) if (op1 < op2) 1 else 0
-        else 0
+      var ticks: Var[Int] = __newVar(0)
+      def tick(i: Int): Rep[Unit] = {
+        ticks = readVar(ticks) + i
+      }
 
-      val e_dst = dst
+      def execute(
+          f2e: Map[String, Port[Int]]
+      ): (Rep[Int], Rep[Int], Rep[Boolean], Rep[Int]) = {
+        val dst = f2e("dst").read
+        val op1 = f2e("val1").read
+        val op2 = f2e("val2").read
+        val op = f2e("op").read
 
-      val pred = f2e("bpred").read
-      val e_annul =
-        if (pred == NotBranch) false
-        else if (e_val == 0) pred == BranchTaken
-        else if (e_val == 1) pred == BranchNotTaken
-        else false
+        val e_val =
+          if (op == AddOp) op1 + op2
+          else if (op == SubOp) op1 - op2
+          else if (op == MulOp) op1 * op2
+          else if (op == EqOp) if (op1 == op2) 1 else 0
+          else if (op == NeqOp) if (op1 != op2) 1 else 0
+          else if (op == LtOp) if (op1 < op2) 1 else 0
+          else if (op == GtOp) if (op1 > op2) 1 else 0
+          else if (op == LeOp) if (op1 <= op2) 1 else 0
+          else if (op == GeOp) if (op1 >= op2) 1 else 0
+          else 0
 
-      val delta = f2e("bdelta").read
+        if (op == MulOp) {
+          if (op1 == 0 || op2 == 0) tick(1)
+          else tick(7)
+        }
 
-      val e_nextpc =
-        if (e_val == 0) f2e("epc").read + 1
-        else if (e_val == 1) f2e("epc").read + delta
-        else f2e("epc").read
+        val e_dst = dst
 
-      (e_dst, e_val, e_annul, e_nextpc)
-    }
+        val pred = f2e("bpred").read
+        val e_annul =
+          if (pred == NotBranch) false
+          else if (e_val == 0) pred == BranchTaken
+          else if (e_val == 1) pred == BranchNotTaken
+          else false
 
-    def BTB(pc: Rep[Int]): Rep[Int] = pc + 1
+        val delta = f2e("bdelta").read
 
-    def BPredict(pc: Rep[Int]): Rep[Boolean] = false
+        val e_nextpc =
+          if (e_val == 0) f2e("epc").read + 1
+          else if (e_val == 1) f2e("epc").read + delta
+          else f2e("epc").read + 1
 
-    def run(prog: Program, state: Rep[RegFile]): Rep[RegFile] = {
+        (e_dst, e_val, e_annul, e_nextpc)
+      }
+
+      def BTB(pc: Rep[Int]): Rep[Int] = pc + 1
+
+      def BPredict(pc: Rep[Int]): Rep[Boolean] = false
+
+
       val regfile: Rep[RegFile] = state
+      var pc: Port[Int] = new Port[Int](0)
 
       var f2e: Map[String, Port[Int]] = Map(
         "dst" -> new Port[Int](0),
         "val1" -> new Port[Int](0),
         "val2" -> new Port[Int](0),
-        "op" -> new Port[Int](0),
+        "op" -> new Port[Int](AddOp),
         "bpred" -> new Port[Int](NotBranch),
         "bdelta" -> new Port[Int](0),
-        "pc" -> new Port[Int](0),
         "epc" -> new Port[Int](0)
       )
 
@@ -260,17 +318,18 @@ error:
         "val" -> new Port[Int](0)
       )
 
-
+      // Run until all Ports are default values
       while (
-        (0 <= f2e("pc").read && f2e("pc").read < prog.length)
-        || (f2e - "pc")
-          .foldLeft(unit(false))((acc, kv) => acc || !kv._2.isDefault)
+        (0 <= pc.read && pc.read < prog.length)
+        || f2e.foldLeft(unit(false))((acc, kv) => acc || !kv._2.isDefault)
         || e2c.foldLeft(unit(false))((acc, kv) => acc || !kv._2.isDefault)
       ) {
 
         // pipeline update
         f2e.foreach { case (_, port) => port.update() }
         e2c.foreach { case (_, port) => port.update() }
+        pc.update()
+        tick(1)
 
         // Commit stage
         if (!e2c("dst").isAmong(0))
@@ -284,48 +343,33 @@ error:
 
         // Fetch stage
 
-        val pc = f2e("pc").read
-        val nextpc = BTB(pc)
-        val predict = BPredict(pc)
+        val nextpc = BTB(pc.read)
+        val predict = BPredict(pc.read)
 
         var stall = false
 
-        if (prog.length == pc) {
-          f2e.foreach {
-            case ("pc", p) => p.freeze(); case (_, p) => p.flush()
-          }
+        if (prog.length == pc.read) {
+          pc.freeze()
+          f2e.foreach { case (_, port) => port.flush() }
         }
 
         for (i <- (0 until prog.length): Range) {
-          if (i == pc) {
+          if (i == pc.read) {
             prog(i) match {
               case Add(rd, rs1, rs2) => {
-
                 stall = !((!e2c("dst").isAmong(rd, rs1, rs2)
                   || e2c("dst").isDefault)
                   && (!f2e("dst").isAmong(rd, rs1, rs2)
                     || f2e("dst").isDefault))
-                
-                if (e_annul) {
-                  f2e.foreach {
-                    case ("pc", p) => p.write(e_nextpc);
-                    case (_, p)    => p.flush()
-                  }
-                } else if (stall) {
-                  // stall
-                  f2e.foreach {
-                    case ("pc", p) => p.freeze(); case (_, p) => p.flush()
-                  }
-                } else {
-                  f2e("dst").write(rd)
-                  f2e("val1").write(regfile(rs1))
-                  f2e("val2").write(regfile(rs2))
-                  f2e("op").write(AddOp)
-                  f2e("bpred").write(NotBranch)
-                  f2e("bdelta").write(1)
-                  f2e("pc").write(nextpc)
-                  f2e("epc").write(pc)
-                }
+
+                f2e("dst").write(rd)
+                f2e("val1").write(regfile(rs1))
+                f2e("val2").write(regfile(rs2))
+                f2e("op").write(AddOp)
+                f2e("bpred").write(NotBranch)
+                f2e("bdelta").write(1)
+                f2e("epc").write(pc.read)
+                pc.write(nextpc)
               }
 
               case Addi(rd, rs1, imm) => {
@@ -334,95 +378,86 @@ error:
                   && (!f2e("dst").isAmong(rd, rs1)
                     || f2e("dst").isDefault))
 
-                if (e_annul) {
-                  f2e.foreach {
-                    case ("pc", p) => p.write(e_nextpc);
-                    case (_, p)    => p.flush()
-                  }
-                } else if (stall) {
-                  // stall
-                  f2e.foreach {
-                    case ("pc", p) => p.freeze(); case (_, p) => p.flush()
-                  }
-                } else {
-                  f2e("dst").write(rd)
-                  f2e("val1").write(regfile(rs1))
-                  f2e("val2").write(imm)
-                  f2e("op").write(AddOp)
-                  f2e("bpred").write(NotBranch)
-                  f2e("bdelta").write(1)
-                  f2e("pc").write(nextpc)
-                  f2e("epc").write(pc)
-                }
+                f2e("dst").write(rd)
+                f2e("val1").write(regfile(rs1))
+                f2e("val2").write(imm)
+                f2e("op").write(AddOp)
+                f2e("bpred").write(NotBranch)
+                f2e("bdelta").write(1)
+                f2e("epc").write(pc.read)
+                pc.write(nextpc)
+              }
+
+              case Sub(rd, rs1, rs2) => {
+                stall = !((!e2c("dst").isAmong(rd, rs1, rs2)
+                  || e2c("dst").isDefault)
+                  && (!f2e("dst").isAmong(rd, rs1, rs2)
+                    || f2e("dst").isDefault))
+
+                f2e("dst").write(rd)
+                f2e("val1").write(regfile(rs1))
+                f2e("val2").write(regfile(rs2))
+                f2e("op").write(SubOp)
+                f2e("bpred").write(NotBranch)
+                f2e("bdelta").write(1)
+                f2e("epc").write(pc.read)
+                pc.write(nextpc)
+              }
+
+              case Mul(rd, rs1, rs2) => {
+                stall = !((!e2c("dst").isAmong(rd, rs1, rs2)
+                  || e2c("dst").isDefault)
+                  && (!f2e("dst").isAmong(rd, rs1, rs2)
+                    || f2e("dst").isDefault))
+
+                f2e("dst").write(rd)
+                f2e("val1").write(regfile(rs1))
+                f2e("val2").write(regfile(rs2))
+                f2e("op").write(MulOp)
+                f2e("bpred").write(NotBranch)
+                f2e("bdelta").write(1)
+                f2e("epc").write(pc.read)
+                pc.write(nextpc)
               }
 
               case JumpNZ(rs, target) => {
-                stall =
-                  !(e2c("dst").read != rs.id && f2e("dst").read != rs.id)
+                stall = !(e2c("dst").read != rs.id && f2e("dst").read != rs.id)
 
-                if (e_annul) {
-                  f2e.foreach {
-                    case ("pc", p) => p.write(e_nextpc);
-                    case (_, p)    => p.flush()
-                  }
-                } else if (stall) {
-                  f2e.foreach {
-                    case ("pc", p) => p.freeze(); case (_, p) => p.flush()
-                  }
-                } else {
-                  f2e("dst").write(ZERO)
-                  f2e("val1").write(regfile(rs))
-                  f2e("val2").write(0)
-                  f2e("op").write(NeqOp)
-                  f2e("bpred").write(BranchNotTaken)
-                  f2e("bdelta").write(target)
-                  f2e("pc").write(nextpc)
-                  f2e("epc").write(pc)
-                }
+                f2e("dst").write(ZERO)
+                f2e("val1").write(regfile(rs))
+                f2e("val2").write(0)
+                f2e("op").write(NeqOp)
+                f2e("bpred").write(BranchNotTaken)
+                f2e("bdelta").write(target)
+                f2e("epc").write(pc.read)
+                pc.write(nextpc)
 
               }
               case JumpNeg(rs, target) => {
-                stall =
-                  !(e2c("dst").read != rs.id && f2e("dst").read != rs.id)
+                stall = !(e2c("dst").read != rs.id && f2e("dst").read != rs.id)
 
-                if (e_annul) {
-                  f2e.foreach {
-                    case ("pc", p) => p.write(e_nextpc);
-                    case (_, p)    => p.flush()
-                  }
-                } else if (stall) {
-                  f2e.foreach {
-                    case ("pc", p) => p.freeze(); case (_, p) => p.flush()
-                  }
-                } else {
-                  f2e("dst").write(ZERO)
-                  f2e("val1").write(regfile(rs))
-                  f2e("val2").write(0)
-                  f2e("op").write(LtOp)
-                  f2e("bpred").write(BranchNotTaken)
-                  f2e("bdelta").write(target)
-                  f2e("pc").write(nextpc)
-                  f2e("epc").write(pc)
-                }
+                f2e("dst").write(ZERO)
+                f2e("val1").write(regfile(rs))
+                f2e("val2").write(0)
+                f2e("op").write(LtOp)
+                f2e("bpred").write(BranchNotTaken)
+                f2e("bdelta").write(target)
+                f2e("epc").write(pc.read)
+                pc.write(nextpc)
               }
             }
           }
         }
 
         if (e_annul) {
-          f2e.foreach {
-            case ("pc", p) => p.write(e_nextpc);
-            case (_, p)    => p.flush()
-          }
+          pc.write(e_nextpc)
+          f2e.foreach { case (_, p) => p.flush() }
         } else if (stall) {
-          // stall
-          f2e.foreach {
-            case ("pc", p) => p.freeze()
-            ; case (_, p) => p.flush()
-          }
-        } 
+          pc.freeze()
+          f2e.foreach { case (_, p) => p.flush() }
+        }
       }
-      regfile
+      ticks
     }
   }
 
@@ -466,7 +501,7 @@ error:
   }
 
   test("proc 1") {
-    val snippet = new DslDriverX[Array[Int], Array[Int]] with Interp {
+    val snippet = new DslDriverX[Array[Int], Int] with Interp {
       val N = A3
       val Temp = A2
       val F_n = A1
@@ -494,7 +529,7 @@ error:
   }
 
   test("proc rar hazard") {
-    val snippet = new DslDriverX[Array[Int], Array[Int]] with Interp {
+    val snippet = new DslDriverX[Array[Int], Int] with Interp {
       val prog = List(
         Addi(A1, A0, 1), //
         Addi(A3, A0, 2), // RAR
@@ -510,7 +545,7 @@ error:
   }
 
   test("proc waw hazard") {
-    val snippet = new DslDriverX[Array[Int], Array[Int]] with Interp {
+    val snippet = new DslDriverX[Array[Int], Int] with Interp {
       val prog = List(
         Addi(A0, ZERO, 1),
         Addi(A0, A0, 1), // WAW
@@ -526,7 +561,7 @@ error:
   }
 
   test("proc raw hazard") {
-    val snippet = new DslDriverX[Array[Int], Array[Int]] with Interp {
+    val snippet = new DslDriverX[Array[Int], Int] with Interp {
       val prog = List(
         Addi(A0, ZERO, 1),
         Addi(A1, A0, 1), // RAW
@@ -542,7 +577,7 @@ error:
   }
 
   test("proc war hazard") {
-    val snippet = new DslDriverX[Array[Int], Array[Int]] with Interp {
+    val snippet = new DslDriverX[Array[Int], Int] with Interp {
       val prog = List(
         Addi(A1, A0, 1), //
         Addi(A0, A3, 2), // WAR
@@ -558,7 +593,7 @@ error:
   }
 
   test("proc annul") {
-    val snippet = new DslDriverX[Array[Int], Array[Int]] with Interp {
+    val snippet = new DslDriverX[Array[Int], Int] with Interp {
       val prog = List(
         Addi(A0, ZERO, 1),
         JumpNZ(A0, 2),
@@ -575,7 +610,7 @@ error:
   }
 
   test("proc loop") {
-    val snippet = new DslDriverX[Array[Int], Array[Int]] with Interp {
+    val snippet = new DslDriverX[Array[Int], Int] with Interp {
       val prog = List(
         Addi(A0, ZERO, 3),
         Addi(A0, A0, -1),
@@ -594,7 +629,7 @@ error:
   }
 
   test("proc hazard") {
-    val snippet = new DslDriverX[Array[Int], Array[Int]] with Interp {
+    val snippet = new DslDriverX[Array[Int], Int] with Interp {
       val prog = List(
         Addi(A0, ZERO, 1),
         Add(A1, A0, A0), // RAW
@@ -618,7 +653,8 @@ error:
 
   test("proc stress") {
     // read from file 1.asm and get the program
-    val snippet = new DslDriverX[Array[Int], Array[Int]] with Interp {
+    val snippet = new DslDriverX[Array[Int], Int] with Interp {
+
       val filename = "src/out/1.asm"
       val program = readProgram(filename)
       val expected: Array[Int] = expectedResult(program)
@@ -632,4 +668,20 @@ error:
     exec("stress", snippet.code)
   }
 
+
+  test("proc mul") {
+    val snippet = new DslDriverX[Array[Int], Int] with Interp {
+      val prog = List(
+        Mul(SECRET2, SECRET1, A0),
+        Addi(A0, A0, 1),
+      )
+      val expected = expectedResult(prog)
+      override val main = constructMain(expected)
+      def snippet(initRegFile: Rep[RegFile]) = {
+        run(prog, initRegFile)
+      }
+    }
+    exec("mul", snippet.code)
+
+  }
 }
