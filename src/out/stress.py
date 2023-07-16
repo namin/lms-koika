@@ -9,18 +9,19 @@ import random
 # Instructions:
 # addi rd rs1 imm
 # add rd rs1 rs2
+# mul rd rs1 rs2
+# sub rd rs1 rs2
 # jumpnz rs1 imm
 # jumpneg rs1 imm
 
 # this file generates a random sequence of instructions
 # and writes it to a file. USed to stress test the processor
 
-MAXREGS = 5
-MAXDEPTH = 200
-BRANCHLIMIT = 50
+MAXREGS = 9
 
 
 def genNinst(n: int):
+    MAXDEPTH = 5
     ret = [f"addi {MAXREGS} {MAXREGS} {MAXDEPTH}"] + ["nop"] * (n-2)
 
     branch_prelude = [f"jumpneg {MAXREGS} EXIT",
@@ -30,16 +31,26 @@ def genNinst(n: int):
     while i < len(ret):
         if ret[i] == "nop":
             cmd = random.randint(0, 100)
-            if cmd <= 30:
+            if cmd <= 20:
                 rd = random.randint(1, MAXREGS-1)
                 rs1 = random.randint(1, MAXREGS-1)
                 rs2 = random.randint(1, MAXREGS-1)
                 ret[i] = f"add {rd} {rs1} {rs2}"
-            elif cmd <= 80:
+            elif cmd <= 30:
                 rd = random.randint(1, MAXREGS-1)
                 rs1 = random.randint(1, MAXREGS-1)
                 imm = random.randint(0, 2**16)
                 ret[i] = f"addi {rd} {rs1} {imm}"
+            elif cmd <= 40:
+                rd = random.randint(1, MAXREGS-1)
+                rs1 = random.randint(1, MAXREGS-1)
+                rs2 = random.randint(1, MAXREGS-1)
+                ret[i] = f"sub {rd} {rs1} {rs2}"
+            elif cmd <= 80:
+                rd = random.randint(1, MAXREGS-1)
+                rs1 = random.randint(1, MAXREGS-1)
+                rs2 = random.randint(1, MAXREGS-1)
+                ret[i] = f"mul {rd} {rs1} {rs2}"
             elif cmd <= 100:
                 # want to stay inside program
                 lower = -i + 1

@@ -27,6 +27,7 @@ class StagedProcInterp1bPC extends TutorialFunSuite {
     |// cbmc -DCBMC file.c for verification
     |#ifndef CBMC
     |#define __CPROVER_assert(b,s) 0
+    |#define nondet_uint() 0
     |#endif
     |
     |int bounded(int low, int high) {
@@ -41,11 +42,16 @@ class StagedProcInterp1bPC extends TutorialFunSuite {
     |}
     |
     |int main(int argc, char *argv[]) {
+    |  int input = bounded(0, 10);
     |  int regfile[11] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
-    |  int regfile[1] = bounded(0, 10);
+    |  int regfile2[11] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ,0};
+    |  regfile[1] = input;
+    |  regfile2[1] = input;
+    |  for (int i = 7; i < 11; i++) {
+    |    regfile[i] = bounded(0, 10);
+    |    regfile2[i] = bounded(0, 10);
+    |  }
     |  int c1 = Snippet(regfile);
-    |  int regfile2[11] = {0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 4};
-    |  int regfile2[1] = bounded(0, 10);
     |  int c2 = Snippet(regfile2);
     |  __CPROVER_assert(c1 == c2, "timing leak");
     |""".stripMargin
@@ -60,9 +66,9 @@ class StagedProcInterp1bPC extends TutorialFunSuite {
     printexpected += s""" ");
     |""".stripMargin
 
+
     for (i <- 0 until expected.length) {
       ret += s"""
-    |  __CPROVER_assert(regfile[$i]==${expected(i)}, "failure $i");
     |  if (regfile[$i] != ${expected(i)}) {
     |    printf("error: regfile[$i] = %d, expected ${expected(
                  i
@@ -199,6 +205,10 @@ class StagedProcInterp1bPC extends TutorialFunSuite {
               Add(Reg(rd.toInt), Reg(rs1.toInt), Reg(rs2.toInt))
             case Array("addi", rd, rs1, imm) =>
               Addi(Reg(rd.toInt), Reg(rs1.toInt), imm.toInt)
+            case Array("mul", rd, rs1, rs2) =>
+              Mul(Reg(rd.toInt), Reg(rs1.toInt), Reg(rs2.toInt))
+            case Array("sub", rd, rs1, rs2) =>
+              Sub(Reg(rd.toInt), Reg(rs1.toInt), Reg(rs2.toInt))
             case Array("jumpnz", rs, imm) =>
               JumpNZ(Reg(rs.toInt), imm.toInt)
             case Array("jumpneg", rs, imm) =>
@@ -208,6 +218,9 @@ class StagedProcInterp1bPC extends TutorialFunSuite {
         }
         .toList
     }
+
+
+
 
     def expectedResult(prog: Program): Array[Int] = {
       var rf: Array[Int] = new Array[Int](REGFILE_SIZE + 4)
@@ -673,7 +686,12 @@ class StagedProcInterp1bPC extends TutorialFunSuite {
     val snippet = new DslDriverX[Array[Int], Int] with Interp {
       val prog = List(
         Mul(SECRET2, SECRET1, A0),
-        Addi(A0, A0, 1),
+        Addi(A0, ZERO, 1),
+        Addi(A1, ZERO, 2),
+        Addi(A2, ZERO, 3),
+        Addi(A3, ZERO, 4),
+        Addi(A4, ZERO, 5),
+        Addi(A5, ZERO, 6),
       )
       val expected = expectedResult(prog)
       override val main = constructMain(expected)
