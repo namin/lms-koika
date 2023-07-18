@@ -13,83 +13,35 @@ int* Snippet(int* x0) {
   int x4 = 0;
   int x5 = 0;
   int x6 = 0;
-  while (0 <= x1 && x1 < 9) {
+  while (0 <= x1 && x1 < 3) {
     int x7 = x2;
     x1 = x7;
     x0[x3] = x5;
     int x8 = x4;
     x3 = x8;
     x5 = x6;
-    if (0 == x7) if (!(x8 == 2 || x8 == 0) || x8 == 0) {
-      x4 = 2;
-      x6 = x0[0] + 1;
-      x2 = x7 + 1;
-    } else {
-      x4 = 0;
-      x6 = 0;
-    }
-    if (1 == x7) if (!(x8 == 1 || x8 == 0) || x8 == 0) {
+    if (0 == x7) if (!(x8 == 1 || x8 == 0) || x8 == 0) {
       x4 = 1;
-      x6 = x0[0];
+      x6 = x0[0] + 3;
       x2 = x7 + 1;
     } else {
       x4 = 0;
       x6 = 0;
     }
-    if (2 == x7) if (!(x8 == 4 || x8 == 0) || x8 == 0) {
-      x4 = 4;
-      x6 = x0[0] + 15;
-      x2 = x7 + 1;
-    } else {
-      x4 = 0;
-      x6 = 0;
-    }
-    if (3 == x7) if (!(x8 == 3 || x8 == 0) || x8 == 0) {
-      x4 = 3;
-      x6 = x0[0];
-      x2 = x7 + 1;
-    } else {
-      x4 = 0;
-      x6 = 0;
-    }
-    if (4 == x7) if (!(x8 == 3 || x8 == 2 || x8 == 1) || x8 == 0) {
-      x4 = 3;
-      x6 = x0[2] + x0[1];
-      x2 = x7 + 1;
-    } else {
-      x4 = 0;
-      x6 = 0;
-    }
-    if (5 == x7) if (!(x8 == 1 || x8 == 2 || x8 == 0) || x8 == 0) {
-      x4 = 1;
-      x6 = x0[2] + x0[0];
-      x2 = x7 + 1;
-    } else {
-      x4 = 0;
-      x6 = 0;
-    }
-    if (6 == x7) if (!(x8 == 2 || x8 == 3 || x8 == 0) || x8 == 0) {
-      x4 = 2;
-      x6 = x0[3] + x0[0];
-      x2 = x7 + 1;
-    } else {
-      x4 = 0;
-      x6 = 0;
-    }
-    if (7 == x7) {
-      bool x9 = x8 == 4;
+    if (1 == x7) {
+      bool x9 = x8 == 1;
       if (!(x9 || x9) || x8 == 0) {
-        x4 = 4;
-        x6 = x0[4] + -1;
+        x4 = 1;
+        x6 = x0[1] + -1;
         x2 = x7 + 1;
       } else {
         x4 = 0;
         x6 = 0;
       }
     }
-    if (8 == x7) {
-      if (x8 != 4) if (x0[4] == 0) x2 = x7 + 1;
-      else x2 = x7 + -4;
+    if (2 == x7) {
+      if (x8 != 1) if (x0[1] == 0) x2 = x7 + 1;
+      else x2 = x7 + -1;
       x4 = 0;
       x6 = 0;
     }
@@ -113,19 +65,19 @@ int main(int argc, char *argv[]) {
     printf("error: regfile[0] = %d, expected 0\n", regfile[0]);
     goto error;
   }
-  __CPROVER_assert(regfile[1]==610, "failure 1");
-  if (regfile[1] != 610) {
-    printf("error: regfile[1] = %d, expected 610\n", regfile[1]);
+  __CPROVER_assert(regfile[1]==0, "failure 1");
+  if (regfile[1] != 0) {
+    printf("error: regfile[1] = %d, expected 0\n", regfile[1]);
     goto error;
   }
-  __CPROVER_assert(regfile[2]==987, "failure 2");
-  if (regfile[2] != 987) {
-    printf("error: regfile[2] = %d, expected 987\n", regfile[2]);
+  __CPROVER_assert(regfile[2]==0, "failure 2");
+  if (regfile[2] != 0) {
+    printf("error: regfile[2] = %d, expected 0\n", regfile[2]);
     goto error;
   }
-  __CPROVER_assert(regfile[3]==987, "failure 3");
-  if (regfile[3] != 987) {
-    printf("error: regfile[3] = %d, expected 987\n", regfile[3]);
+  __CPROVER_assert(regfile[3]==0, "failure 3");
+  if (regfile[3] != 0) {
+    printf("error: regfile[3] = %d, expected 0\n", regfile[3]);
     goto error;
   }
   __CPROVER_assert(regfile[4]==0, "failure 4");
@@ -151,7 +103,7 @@ int main(int argc, char *argv[]) {
     printf("%d ", regfile[i]);
   }
   printf("\nexpected:\n");
-  printf("0 610 987 987 0 0 0  ");
+  printf("0 0 0 0 0 0 0  ");
   printf("\n\nFAILED\n");
   return 1;
 }
