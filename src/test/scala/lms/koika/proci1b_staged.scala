@@ -142,6 +142,7 @@ class StagedProcInterp1bPC extends TutorialFunSuite {
     type |∨|[T, U] = { type λ[X] = ¬¬[X] <:< (T ∨ U) }
     // see https://stackoverflow.com/questions/3508077/how-to-define-type-disjunction-union-types
 
+
     type Program = List[Instruction]
     type RegFile = Array[Int]
     
@@ -315,6 +316,7 @@ class StagedProcInterp1bPC extends TutorialFunSuite {
 
       val regfile: Rep[RegFile] = state
       var pc: Port[Int] = new Port[Int](0)
+
 
       var f2e: Map[String, Port[Int]] = Map(
         "dst" -> new Port[Int](0),
