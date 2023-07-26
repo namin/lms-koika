@@ -4,18 +4,6 @@
 ; git-subrepo command. See https://github.com/ingydotnet/git-subrepo#readme
 ;
 [subrepo]
-	remote = lms-clean-cam
-	branch = cstruct-split
-	commit = a71a79ce7b4e72ebc7cf811964780d1d09e99dfd
-	parent = 0d6e940bde264ad95fe225c2c0a5f76d2cd732bc
-	method = merge
-	cmdver = 0.4.6
-; DO NOT EDIT (unless you know what you are doing)
-;
-; This subdirectory is a git "subrepo", and this file is maintained by the
-; git-subrepo command. See https://github.com/ingydotnet/git-subrepo#readme
-;
-[subrepo]
 	remote = git@github.com:TiarkRompf/lms-clean.git
 	branch = master
 	commit = f3338d3ab0ea74e90e44acfdbbda7912c249a7fc
