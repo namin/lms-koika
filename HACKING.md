@@ -23,5 +23,5 @@ $ git subrepo push -r <my-lms-clean> [<optional branch>]
 Note that you can also pull changes from this remote similarly via
 
 ```
-$ git subrepo pull -r <my-lms-clean> [<optional branch>]
+$ git subrepo pull vendor/lms-clean -r <my-lms-clean> [-b <branch>]
 ```
