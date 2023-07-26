@@ -11,26 +11,26 @@ import lms.collection.mutable._
 class StructTest extends TutorialFunSuite {
   val under = "backend/"
 
+  @CStruct case class Complex(real: Double, image: Double)
+
   test("basic_struct_is_OK") {
-    val driver = new DslDriverC[Int, Double] with StructOps { q =>
+    val driver = new DslDriverC[Complex, Complex] with StructOps { q =>
       override val codegen = new DslGenC with CCodeGenStruct {
         val IR: q.type = q
       }
 
-      @CStruct case class Complex(real: Double, image: Double)
+      @CStructOps
+      abstract class ComplexOps[Complex](real: Double, image: Double)
 
       @virtualize
-      def snippet(arg: Rep[Int]) = {
-        val s = Pointer.local[Complex]
-        s.real = 1.23 // that is s.writeField("real", 1.23)
-        s.image = 2.34
-        val s2 = Pointer(s.deref)
-        s2.real = 5.0
-        val s3 = Pointer(s2.deref)
-        s3.real = 10.0
-        s3.real + s.image // that is s.readField("real") ...
+      def snippet(arg: Rep[Complex]) = {
+        arg.real = 1.23 // that is s.writeField("real", 1.23)
+        arg.image = arg.real
+        arg
       }
     }
+    // TODO: this output doesn't compile; we need to adjust [convert] to check
+    // for manifest[Complex].
     check("basic_struct", driver.code, "c")
   }
 }
