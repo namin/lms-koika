@@ -1,0 +1,12 @@
+; DO NOT EDIT (unless you know what you are doing)
+;
+; This subdirectory is a git "subrepo", and this file is maintained by the
+; git-subrepo command. See https://github.com/ingydotnet/git-subrepo#readme
+;
+[subrepo]
+	remote = git@github.com:TiarkRompf/lms-clean.git
+	branch = master
+	commit = f3338d3ab0ea74e90e44acfdbbda7912c249a7fc
+	parent = cce2d0168fe736f0635e1df041cddab227745f73
+	method = merge
+	cmdver = 0.4.6
