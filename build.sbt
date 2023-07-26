@@ -24,5 +24,5 @@ parallelExecution in Test := false
 lazy val koika = (project in file(".")).dependsOn(lms % "test->test")
   // .settings(fork := true)
 
-lazy val lms = ProjectRef(file("../lms-clean"), "lms-clean")
+lazy val lms = (project in file("vendor/lms-clean"))
   // .settings(fork := true)
