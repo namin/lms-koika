@@ -5,15 +5,9 @@ Emitting C Generated Code
 #include <stdio.h>
 #include <stdint.h>
 #include <stdbool.h>
-/*********** Datastructures ***********/
-struct Complex {
-  double real;
-  double image;
-};
 /**************** Snippet ****************/
-struct Complex Snippet(struct Complex x0) {
-  x0.real = 1.23;
-  x0.image = x0.real;
+int** Snippet(int** x0) {
+  x0[0][0] = 3;
   return x0;
 }
 /*****************************************
