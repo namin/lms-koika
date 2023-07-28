@@ -1,27 +1,43 @@
 # Managing `lms-clean`
 
 To ease dependency management, we build `lms-clean` from `vendor/lms-clean`,
-which contains our fork of that repository. The easiest way to sync this fork
-with [upstream](https://github.com/TiarkRompf/lms-clean) requires
-[`git subrepo`](https://github.com/ingydotnet/git-subrepo) -- from a clean
-working tree, simply run `git subrepo pull` from the project root. This will
-pull from upstream and announce merge conflicts as necessary.
+which contains our fork of that repository. This is managed by `git subtree`,
+which is bundled with git since version 1.7.11.
 
-Pushing changes from this fork back upstream is a little more involved. First,
-fork `lms-clean` and add a remote as follows:
+## Quickstart
 
+From the root of the repo:
+
+To pull from upstream:
 ```
-$ git remote add <my-lms-clean> <my-lms-clean-url>
-```
-
-Now, changes can be pushed to your fork of `lms-clean` via
-
-```
-$ git subrepo push -r <my-lms-clean> [<optional branch>]
+$ git subtree pull --prefix vendor/lms-clean https://github.com/TiarkRompf/lms-clean master --squash
 ```
 
-Note that you can also pull changes from this remote similarly via
+To push to a fork:
+```
+$ git subtree push --prefix vendor/lms-clean <my-fork-url> <branch>
+```
+
+To avoid needing to type out URLs every time, they can be added as remotes:
 
 ```
-$ git subrepo pull vendor/lms-clean -r <my-lms-clean> [-b <branch>]
+$ git remote add lms-clean-master https://github.com/TiarkRompf/lms-clean
 ```
+
+and now `lms-clean-master` can be used in place of a URL in the above commands.
+
+## Miscellanea
+
+- To minimize issues with merging, `vendor/lms-clean` should be up to date with
+  `master` before pushing. Rebases are known to cause issues if it causes the
+  history of `lms-koika` to diverge from the most recent push.
+
+- If getting the error `refusing to merge unrelated histories` when pulling,
+  make sure not to forget the `--squash` option.
+
+- The commits pushed back to `lms-clean` (or forks thereof) will be all commits
+  touching `vendor/lms-clean` in the history of this repo since the previous
+  push/pull from that remote. This means that, if there are commits that change
+  both `lms-clean` and `lms-koika`, the commit messages may not be immediately
+  relevant. These can be resolved on the fork, or avoided entirely by not
+  making such component-spanning commits.
