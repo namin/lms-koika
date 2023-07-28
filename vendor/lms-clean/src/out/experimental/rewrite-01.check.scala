@@ -1,1 +1,0 @@
-rewrite: foo1?A?B ===> foo2?A?B
