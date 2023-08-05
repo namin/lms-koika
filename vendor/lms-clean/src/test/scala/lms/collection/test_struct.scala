@@ -14,13 +14,10 @@ class StructTest extends TutorialFunSuite {
   @CStruct case class Complex(real: Double, image: Double)
 
   test("basic_struct_is_OK") {
-    val driver = new DslDriverC[Complex, Complex] with StructOps { q =>
+    val driver = new DslDriverC[Complex, Complex] with ComplexOps { q =>
       override val codegen = new DslGenC with CCodeGenStruct {
         val IR: q.type = q
       }
-
-      @CStructOps
-      abstract class ComplexOps[Complex](real: Double, image: Double)
 
       @virtualize
       def snippet(arg: Rep[Complex]) = {

@@ -31,17 +31,7 @@ class InterpCcStructTest extends TutorialFunSuite {
     , timer: Int
     )
 
-  trait InterpCc extends Dsl with StructOps {
-    @CStructOps
-    abstract class stateTOps[stateT]
-      ( regs: Array[Int]
-      , saved_regs: Array[Int]
-      , mem: Array[Int]
-      , cache_key: Int
-      , cache_val: Int
-      , timer: Int
-      )
-
+  trait InterpCc extends Dsl with stateTOps {
     def state_reg(s: Rep[stateT], i: Rep[Int]): Rep[Int] =
       s.regs(i)
     def set_state_reg(s: Rep[stateT], i: Rep[Int], v: Rep[Int]): Rep[Unit] =
