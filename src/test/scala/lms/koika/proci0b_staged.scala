@@ -363,7 +363,7 @@ error:
         run(Fibprog, (initRegFile))
       }
     }
-    exec("1", snippet.code)
+    check("1", snippet.code)
   }
 
   test("proc rar hazard") {
@@ -381,7 +381,7 @@ error:
         run(prog, initRegFile)
       }
     }
-    exec("rar_hazard", snippet.code)
+    check("rar_hazard", snippet.code)
   }
 
 
@@ -400,7 +400,7 @@ error:
         run(prog, initRegFile)
       }
     }
-    exec("waw_hazard", snippet.code)
+    check("waw_hazard", snippet.code)
   }
 
   test("proc raw hazard") {
@@ -418,7 +418,7 @@ error:
         run(prog, initRegFile)
       }
     }
-    exec("raw_hazard", snippet.code)
+    check("raw_hazard", snippet.code)
   }
 
   test("proc war hazard") {
@@ -436,7 +436,7 @@ error:
         run(prog, initRegFile)
       }
     }
-    exec("war_hazard", snippet.code)
+    check("war_hazard", snippet.code)
   }
 
 
@@ -456,7 +456,7 @@ error:
         run(prog, (initRegFile))
       }
     }
-    exec("loop_hazard", snippet.code)
+    check("loop_hazard", snippet.code)
   }
 
   test("proc hazard") {
@@ -480,7 +480,7 @@ error:
         run(prog, initRegFile)
       }
     }
-    exec("hazard", snippet.code)
+    check("hazard", snippet.code)
 
   }
 

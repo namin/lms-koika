@@ -549,7 +549,7 @@ class StagedProcInterp1bPC extends TutorialFunSuite {
         run(Fibprog, initRegFile)
       }
     }
-    exec("1", snippet.code)
+    check("1", snippet.code)
   }
 
   test("proc rar hazard") {
@@ -565,7 +565,7 @@ class StagedProcInterp1bPC extends TutorialFunSuite {
         run(prog, initRegFile)
       }
     }
-    exec("rar_hazard", snippet.code)
+    check("rar_hazard", snippet.code)
   }
 
   test("proc waw hazard") {
@@ -581,7 +581,7 @@ class StagedProcInterp1bPC extends TutorialFunSuite {
         run(prog, initRegFile)
       }
     }
-    exec("waw_hazard", snippet.code)
+    check("waw_hazard", snippet.code)
   }
 
   test("proc raw hazard") {
@@ -597,7 +597,7 @@ class StagedProcInterp1bPC extends TutorialFunSuite {
         run(prog, initRegFile)
       }
     }
-    exec("raw_hazard", snippet.code)
+    check("raw_hazard", snippet.code)
   }
 
   test("proc war hazard") {
@@ -613,7 +613,7 @@ class StagedProcInterp1bPC extends TutorialFunSuite {
         run(prog, initRegFile)
       }
     }
-    exec("war_hazard", snippet.code)
+    check("war_hazard", snippet.code)
   }
 
   test("proc annul") {
@@ -630,7 +630,7 @@ class StagedProcInterp1bPC extends TutorialFunSuite {
         run(prog, initRegFile)
       }
     }
-    exec("annul", snippet.code)
+    check("annul", snippet.code)
   }
 
   test("proc loop") {
@@ -649,7 +649,7 @@ class StagedProcInterp1bPC extends TutorialFunSuite {
         run(prog, initRegFile)
       }
     }
-    exec("loop_hazard", snippet.code)
+    check("loop_hazard", snippet.code)
   }
 
   test("proc hazard") {
@@ -671,7 +671,7 @@ class StagedProcInterp1bPC extends TutorialFunSuite {
         run(prog, initRegFile)
       }
     }
-    exec("hazard", snippet.code)
+    check("hazard", snippet.code)
 
   }
 
@@ -689,7 +689,7 @@ class StagedProcInterp1bPC extends TutorialFunSuite {
       }
 
     }
-    exec("stress", snippet.code)
+    check("stress", snippet.code)
   }
 
   test("proc mul") {
@@ -709,7 +709,7 @@ class StagedProcInterp1bPC extends TutorialFunSuite {
         run(prog, initRegFile)
       }
     }
-    exec("mul", snippet.code)
+    check("mul", snippet.code)
 
   }
 }

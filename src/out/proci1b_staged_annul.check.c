@@ -21,7 +21,7 @@ int Snippet(int* x0) {
   int x12 = 0;
   int x13 = 0;
   int x14 = 0;
-  while (x1 < 200 && (!(x11 == 0) || !(x9 == 0) || x2 < 3)) {
+  while (x1 < 200 && (!(x11 == 0) || !(x9 == 0) || x2 < 4)) {
     int x15 = x3;
     x2 = x15;
     int x16 = x4;
@@ -44,7 +44,7 @@ int Snippet(int* x0) {
     x13 = x16;
     x14 = x26;
     bool x27 = false;
-    if (3 == x15) {
+    if (4 == x15) {
       int x28 = x5;
       int x29 = x6;
       x4 = 0;
@@ -56,9 +56,9 @@ int Snippet(int* x0) {
       x7 = 137001;
     }
     if (0 == x15) {
-      x27 = !((!(x21 == 2 || x21 == 1) || x24) && (!(x16 == 2 || x16 == 1) || x16 == 0));
-      x4 = 2;
-      x5 = x0[1];
+      x27 = !((!(x21 == 1 || x24) || x24) && (!(x16 == 1 || x16 == 0) || x16 == 0));
+      x4 = 1;
+      x5 = x0[0];
       x6 = 1;
       x7 = 137001;
       x8 = 137012;
@@ -67,9 +67,20 @@ int Snippet(int* x0) {
       x3 = x15 + 1;
     }
     if (1 == x15) {
-      x27 = !((!(x21 == 4 || x21 == 1) || x24) && (!(x16 == 4 || x16 == 1) || x16 == 0));
-      x4 = 4;
+      x27 = !(x21 != 1 && x16 != 1);
+      x4 = 0;
       x5 = x0[1];
+      x6 = 0;
+      x7 = 137005;
+      x8 = 137011;
+      x10 = 2;
+      x12 = x15;
+      x3 = x15 + 1;
+    }
+    if (2 == x15) {
+      x27 = !((!(x21 == 2 || x24) || x24) && (!(x16 == 2 || x16 == 0) || x16 == 0));
+      x4 = 2;
+      x5 = x0[0];
       x6 = 2;
       x7 = 137001;
       x8 = 137012;
@@ -77,10 +88,10 @@ int Snippet(int* x0) {
       x12 = x15;
       x3 = x15 + 1;
     }
-    if (2 == x15) {
-      x27 = !((!(x21 == 3 || x21 == 5) || x24) && (!(x16 == 3 || x16 == 5) || x16 == 0));
+    if (3 == x15) {
+      x27 = !((!(x21 == 3 || x24) || x24) && (!(x16 == 3 || x16 == 0) || x16 == 0));
       x4 = 3;
-      x5 = x0[5];
+      x5 = x0[0];
       x6 = 3;
       x7 = 137001;
       x8 = 137012;
@@ -157,20 +168,20 @@ int main(int argc, char *argv[]) {
     printf("error: regfile[0] = %d, expected 0\n", regfile[0]);
     goto error;
   }
-  if (regfile[1] != 0) {
-    printf("error: regfile[1] = %d, expected 0\n", regfile[1]);
+  if (regfile[1] != 1) {
+    printf("error: regfile[1] = %d, expected 1\n", regfile[1]);
     goto error;
   }
-  if (regfile[2] != 1) {
-    printf("error: regfile[2] = %d, expected 1\n", regfile[2]);
+  if (regfile[2] != 0) {
+    printf("error: regfile[2] = %d, expected 0\n", regfile[2]);
     goto error;
   }
   if (regfile[3] != 3) {
     printf("error: regfile[3] = %d, expected 3\n", regfile[3]);
     goto error;
   }
-  if (regfile[4] != 2) {
-    printf("error: regfile[4] = %d, expected 2\n", regfile[4]);
+  if (regfile[4] != 0) {
+    printf("error: regfile[4] = %d, expected 0\n", regfile[4]);
     goto error;
   }
   if (regfile[5] != 0) {
@@ -205,7 +216,7 @@ int main(int argc, char *argv[]) {
     printf("%d ", regfile[i]);
   }
   printf("\nexpected:\n");
-  printf("0 0 1 3 2 0 0 0 0 0 0  ");
+  printf("0 1 0 3 0 0 0 0 0 0 0  ");
   printf("\n\nFAILED with tick count=%d\n", c1);
   #endif
   return 1;
