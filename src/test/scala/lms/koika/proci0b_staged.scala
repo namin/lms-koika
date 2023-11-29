@@ -366,6 +366,43 @@ error:
     exec("1", snippet.code)
   }
 
+  test("proc rar hazard") {
+    val snippet = new DslDriverX[Array[Int], Array[Int]] with Interp {
+      val prog = List(
+        BrTarget("entry"),
+        Addi(A1, A0, 1), // 
+        Addi(A3, A0, 2), // RAR
+        Addi(A2, A4, 3), // NO RAR
+        BrTarget("exit")
+      )
+      val expected = expectedResult(prog)
+      override val main = constructMain(expected)
+      def snippet(initRegFile: Rep[RegFile]) = {
+        run(prog, initRegFile)
+      }
+    }
+    exec("rar_hazard", snippet.code)
+  }
+
+
+  test("proc waw hazard") {
+    val snippet = new DslDriverX[Array[Int], Array[Int]] with Interp {
+      val prog = List(
+        BrTarget("entry"),
+        Addi(A0, ZERO, 1),
+        Addi(A0, A0, 1), // WAW
+        Addi(A3, A2, 2), // NO WAW
+        BrTarget("exit")
+      )
+      val expected = expectedResult(prog)
+      override val main = constructMain(expected)
+      def snippet(initRegFile: Rep[RegFile]) = {
+        run(prog, initRegFile)
+      }
+    }
+    exec("waw_hazard", snippet.code)
+  }
+
   test("proc raw hazard") {
     val snippet = new DslDriverX[Array[Int], Array[Int]] with Interp {
       val prog = List(
@@ -383,6 +420,25 @@ error:
     }
     exec("raw_hazard", snippet.code)
   }
+
+  test("proc war hazard") {
+    val snippet = new DslDriverX[Array[Int], Array[Int]] with Interp {
+      val prog = List(
+        BrTarget("entry"),
+        Addi(A1, A0, 1), // 
+        Addi(A0, A3, 2), // WAR
+        Addi(A2, A4, 3), // NO WAR
+        BrTarget("exit")
+      )
+      val expected = expectedResult(prog)
+      override val main = constructMain(expected)
+      def snippet(initRegFile: Rep[RegFile]) = {
+        run(prog, initRegFile)
+      }
+    }
+    exec("war_hazard", snippet.code)
+  }
+
 
   test("proc loop") {
     val snippet = new DslDriverX[Array[Int], Array[Int]] with Interp {
@@ -421,7 +477,7 @@ error:
       val expected = expectedResult(prog)
       override val main = constructMain(expected)
       def snippet(initRegFile: Rep[RegFile]) = {
-        run(prog, (initRegFile))
+        run(prog, initRegFile)
       }
     }
     exec("hazard", snippet.code)

@@ -8,7 +8,7 @@ import lms.macros.SourceContext
 class StagedProcInterp1bPC extends TutorialFunSuite {
   val under = "proci1b_staged_"
 
-  val REGFILE_SIZE:Int = 7
+  val REGFILE_SIZE: Int = 7
   val regfile_main = """
     |int main(int argc, char *argv[]) {
     |  int regfile[7] = {0, 0, 0, 0, 0, 0, 0};
@@ -28,16 +28,12 @@ class StagedProcInterp1bPC extends TutorialFunSuite {
     |#ifndef CBMC
     |#define __CPROVER_assert(b,s) 0
     |#define nondet_uint() 0
+    |#define __CPROVER_assume(b) 0 
     |#endif
     |
     |int bounded(int low, int high) {
     |  int x = nondet_uint();
-    |  if (x < low) {
-    |    x = low;
-    |  }
-    |  if (x > high) {
-    |    x = high;
-    |  }
+    | __CPROVER_assume(low <= x && x <= high);
     |  return x;
     |}
     |
@@ -54,8 +50,8 @@ class StagedProcInterp1bPC extends TutorialFunSuite {
     |  int c1 = Snippet(regfile);
     |  int c2 = Snippet(regfile2);
     |  __CPROVER_assert(c1 == c2, "timing leak");
+    |#ifndef CBMC
     |""".stripMargin
-
 
     var printexpected = s"""
     |  printf("\\nexpected:\\n");
@@ -65,7 +61,6 @@ class StagedProcInterp1bPC extends TutorialFunSuite {
     }
     printexpected += s""" ");
     |""".stripMargin
-
 
     for (i <- 0 until expected.length) {
       ret += s"""
@@ -78,15 +73,16 @@ class StagedProcInterp1bPC extends TutorialFunSuite {
     |""".stripMargin
     }
     ret += s"""
-    |  printf("OK\\n");
+    |  printf("OK c1=%d\\n", c1);
     |  return 0;
     |error:
     |  printf("\\nRegfile:\\n");
-    |  for (int i = 0; i < 6; i++) {
+    |  for (int i = 0; i < 11; i++) {
     |    printf("%d ", regfile[i]);
     |  }
     |  ${printexpected}
-    |  printf("\\n\\nFAILED\\n");
+    |  printf("\\n\\nFAILED with tick count=%d\\n", c1);
+    |#endif
     |  return 1;
     |}
     |""".stripMargin
@@ -114,16 +110,18 @@ class StagedProcInterp1bPC extends TutorialFunSuite {
     // case class Store(rs1: Reg, rs2: Reg, imm: Int) extends Instruction
 
     // workaround for enums
-    var __i_enum: Int = 137000
+    var __i_enum_DO_NOT_USE: Int = 137000
     def iota: Int = {
-      __i_enum += 1
-      __i_enum
+      __i_enum_DO_NOT_USE += 1
+      __i_enum_DO_NOT_USE
     }
 
+    // 1
     val AddOp = iota
     val MulOp = iota
     val SubOp = iota
 
+    // 4
     val EqOp = iota
     val NeqOp = iota
     val LtOp = iota
@@ -131,6 +129,7 @@ class StagedProcInterp1bPC extends TutorialFunSuite {
     val LeOp = iota
     val GeOp = iota
 
+    // 10
     val BranchTaken = iota
     val BranchNotTaken = iota
     val NotBranch = iota
@@ -144,7 +143,6 @@ class StagedProcInterp1bPC extends TutorialFunSuite {
 
     type Program = List[Instruction]
     type RegFile = Array[Int]
-    
 
     case class Reg(id: Int)
     val ZERO: Reg = Reg(0)
@@ -218,9 +216,6 @@ class StagedProcInterp1bPC extends TutorialFunSuite {
         }
         .toList
     }
-
-
-
 
     def expectedResult(prog: Program): Array[Int] = {
       var rf: Array[Int] = new Array[Int](REGFILE_SIZE + 4)
@@ -312,7 +307,6 @@ class StagedProcInterp1bPC extends TutorialFunSuite {
 
       def BPredict(pc: Rep[Int]): Rep[Boolean] = false
 
-
       val regfile: Rep[RegFile] = state
       var pc: Port[Int] = new Port[Int](0)
 
@@ -331,17 +325,15 @@ class StagedProcInterp1bPC extends TutorialFunSuite {
         "val" -> new Port[Int](0)
       )
 
-      // Run until all Ports are default values
       while (
-        (0 <= pc.read && pc.read < prog.length)
-        || f2e.foldLeft(unit(false))((acc, kv) => acc || !kv._2.isDefault)
-        || e2c.foldLeft(unit(false))((acc, kv) => acc || !kv._2.isDefault)
+        ticks < 200 &&
+        (!f2e("epc").isDefault || !f2e("bdelta").isDefault ||
+          pc.read < prog.length)
       ) {
-
         // pipeline update
+        pc.update()
         f2e.foreach { case (_, port) => port.update() }
         e2c.foreach { case (_, port) => port.update() }
-        pc.update()
         tick(1)
 
         // Commit stage
@@ -355,7 +347,6 @@ class StagedProcInterp1bPC extends TutorialFunSuite {
         e2c("val").write(e_val)
 
         // Fetch stage
-
         val nextpc = BTB(pc.read)
         val predict = BPredict(pc.read)
 
@@ -365,6 +356,8 @@ class StagedProcInterp1bPC extends TutorialFunSuite {
           pc.freeze()
           f2e.foreach { case (_, port) => port.flush() }
         }
+
+        // program unroll
 
         for (i <- (0 until prog.length): Range) {
           if (i == pc.read) {
@@ -384,7 +377,6 @@ class StagedProcInterp1bPC extends TutorialFunSuite {
                 f2e("epc").write(pc.read)
                 pc.write(nextpc)
               }
-
               case Addi(rd, rs1, imm) => {
                 stall = !((!e2c("dst").isAmong(rd, rs1)
                   || e2c("dst").isDefault)
@@ -400,7 +392,6 @@ class StagedProcInterp1bPC extends TutorialFunSuite {
                 f2e("epc").write(pc.read)
                 pc.write(nextpc)
               }
-
               case Sub(rd, rs1, rs2) => {
                 stall = !((!e2c("dst").isAmong(rd, rs1, rs2)
                   || e2c("dst").isDefault)
@@ -416,7 +407,6 @@ class StagedProcInterp1bPC extends TutorialFunSuite {
                 f2e("epc").write(pc.read)
                 pc.write(nextpc)
               }
-
               case Mul(rd, rs1, rs2) => {
                 stall = !((!e2c("dst").isAmong(rd, rs1, rs2)
                   || e2c("dst").isDefault)
@@ -432,7 +422,6 @@ class StagedProcInterp1bPC extends TutorialFunSuite {
                 f2e("epc").write(pc.read)
                 pc.write(nextpc)
               }
-
               case JumpNZ(rs, target) => {
                 stall = !(e2c("dst").read != rs.id && f2e("dst").read != rs.id)
 
@@ -470,6 +459,27 @@ class StagedProcInterp1bPC extends TutorialFunSuite {
           f2e.foreach { case (_, p) => p.flush() }
         }
       }
+      // repeat 2 times
+      for (i <- (0 until 2): Range) {
+
+        // pipeline update
+        f2e.foreach { case (_, port) => port.update() }
+        e2c.foreach { case (_, port) => port.update() }
+        pc.update()
+        tick(1)
+
+        // Commit stage
+        if (!e2c("dst").isAmong(0))
+          regfile(e2c("dst").read) = e2c("val").read
+
+        // Execute stage
+        val (e_dst, e_val, e_annul, e_nextpc) = execute(f2e)
+
+        e2c("dst").write(e_dst)
+        e2c("val").write(e_val)
+
+      }
+
       ticks
     }
   }
@@ -529,6 +539,7 @@ class StagedProcInterp1bPC extends TutorialFunSuite {
         Add(F_n, Temp, ZERO),
         Addi(N, N, -1),
         JumpNZ(N, -4),
+        NOP, // TODO: Last instruction Jump is buggy
         NOP // TODO: Last instruction Jump is buggy
       )
       val expected = expectedResult(Fibprog)
@@ -681,7 +692,6 @@ class StagedProcInterp1bPC extends TutorialFunSuite {
     exec("stress", snippet.code)
   }
 
-
   test("proc mul") {
     val snippet = new DslDriverX[Array[Int], Int] with Interp {
       val prog = List(
@@ -691,7 +701,7 @@ class StagedProcInterp1bPC extends TutorialFunSuite {
         Addi(A2, ZERO, 3),
         Addi(A3, ZERO, 4),
         Addi(A4, ZERO, 5),
-        Addi(A5, ZERO, 6),
+        Addi(A5, ZERO, 6)
       )
       val expected = expectedResult(prog)
       override val main = constructMain(expected)
