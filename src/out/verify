@@ -1,0 +1,10 @@
+#!/usr/bin/zsh
+
+# usage: ./verify <files>...
+
+
+for file in $@; do
+    echo "Verifying $file"
+    cbmc -DCBMC --slice-formula --refine --beautify --compact-trace --verbosity 4  $file
+done
+
