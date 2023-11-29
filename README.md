@@ -23,5 +23,5 @@ The [`GraphBuilderOpt` is linked through the `Adapter` object in the LMS Fronten
 # [Bounded Model Checking](https://www.cprover.org/cbmc/) (also see [newer releases](https://github.com/diffblue/cbmc) and [doc](http://www.cprover.org/cprover-manual/))
 - cd `src/out`
 - `cbmc --compact-trace interpcc_2sct_alt.check.c`
-- `cbmc -DCBMC --refine --compact-trace --beautify --unwind 200 proci1b_staged_mul.actual.c`
+- `cbmc -DCBMC --refine --compact-trace --beautify --unwind 200 proci1b_staged_mul.check.c`
 
