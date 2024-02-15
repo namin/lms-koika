@@ -122,10 +122,19 @@ class BasicBlockTest extends TutorialFunSuite {
   }
 
   trait InterpUnfusedBasicBlockNoHazards extends InterpDsl with WithProgram {
-    def fix[A: Manifest]
-        (f: ((Identifier => Rep[A => A]) => Identifier => Rep[A] => Rep[A]))
-        (s: Identifier): Rep[A => A]
-      = topFun {(x: Rep[A]) => {f(fix(f))(s)(x)}}
+    var blocks: Map[Identifier, Rep[StateT => StateT]] = Map()
+
+    def fix
+        (f: ((Identifier => Rep[StateT => StateT]) => Identifier => Rep[StateT] => Rep[StateT]))
+        (lbl: Identifier): Rep[StateT => StateT]
+      = blocks.get(lbl) match {
+          case None => {
+            val result = topFun {(x: Rep[StateT]) => {f(fix(f))(lbl)(x)}}
+            blocks = blocks + (lbl -> result)
+            result
+          }
+          case Some(f) => f
+        }
 
     def runCFG(cfg: CFG, state: Rep[StateT]) = {
       def execBlockF
