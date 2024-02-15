@@ -38,9 +38,9 @@ class BasicBlockTest extends TutorialFunSuite {
   case class BranchZ(rs: Int, target: Identifier) extends Instruction
 
   abstract sealed class Basic extends Instruction
-  case class Add(rd: Int, rs1: Int, rs2: Int) extends Basic
-  case class Load(rd: Int, im: Int, rs: Int) extends Basic
-  case class Store(rd: Int, im: Int, rs: Int) extends Basic
+  case class Add(dst: Int, s1: Int, s2: Int) extends Basic
+  case class Load(dst: Int, base: Int, offs: Int) extends Basic
+  case class Store(src: Int, base: Int, offs: Int) extends Basic
 
   abstract sealed class Terminator
   case class Ifz(rs: Int, then: Identifier, els: Identifier) extends Terminator
@@ -70,7 +70,7 @@ class BasicBlockTest extends TutorialFunSuite {
   // XXX - I bet there is a way to do this _inside_ the trait that simply
   // creates the topFun on-demand, instead of building this intermediate
   // data structure first.
-  def buildCfgNoHazard(p: Program): CFG = {
+  def buildCFGNoHazard(p: Program): CFG = {
     var blocks: Map[Identifier, Block] = Map()
 
     var currentBlock: Vector[Basic] = Vector()
@@ -107,9 +107,56 @@ class BasicBlockTest extends TutorialFunSuite {
     CFG(blocks, Identifier("main"))
   }
 
-  trait InterpUnfusedBasicBlockNoHazards extends Dsl with StateTOps {
-    def fix[A: Manifest](f: (Rep[A => A] => Rep[A] => Rep[A])): Rep[A => A] = {
-      topFun {(x: Rep[A]) => {f(fix(f))(x)}}
+  trait WithProgram {
+    val program: Program
+  }
+
+  trait InterpDsl extends Dsl with StateTOps {
+    def step(state: Rep[StateT], instr: Basic): Rep[Unit] = {
+      instr match {
+        case Add(dst, s1, s2) => state.regs(dst) = state.regs(s1) + state.regs(s2)
+        case Load(dst, base, offs) => state.regs(dst) = state.mem(state.regs(base) + offs)
+        case Store(src, base, offs) => state.mem(state.regs(base) + offs) = src
+      }
+    }
+  }
+
+  trait InterpUnfusedBasicBlockNoHazards extends InterpDsl with WithProgram {
+    def fix[A: Manifest]
+        (f: ((Identifier => Rep[A => A]) => Identifier => Rep[A] => Rep[A]))
+        (s: Identifier): Rep[A => A]
+      = topFun {(x: Rep[A]) => {f(fix(f))(s)(x)}}
+
+    def runCFG(cfg: CFG, state: Rep[StateT]) = {
+      def execBlockF
+          (f: Identifier => Rep[StateT => StateT])
+          (label: Identifier)
+          (state: Rep[StateT]): Rep[StateT] = {
+        val block = cfg.blocks(label)
+        for (instr <- block.body) {
+          step(state, instr)
+        }
+        block.term match {
+          case Done() => state
+          case Goto(lbl) => f(lbl)(state)
+          case Ifz(rs, then, els) =>
+            if (state.regs(rs) == 0) {
+              f(then)(state)
+            }
+            else {
+              f(els)(state)
+            }
+        }
+      }
+
+      val execBlock = fix(execBlockF)_
+
+      execBlock(Identifier("main"))(state)
+    }
+
+    def run(state: Rep[StateT]) = {
+      val cfg = buildCFGNoHazard(program)
+      runCFG(cfg, state)
     }
   }
 }
