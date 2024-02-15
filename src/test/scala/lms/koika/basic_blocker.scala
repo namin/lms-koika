@@ -20,7 +20,14 @@ class BasicBlockTest extends TutorialFunSuite {
     super.check(label, code, suffix)
 
   // Newtype
-  case class Identifier(s: String)
+  case class Identifier(s: String) {
+    override def equals(other: Any): Boolean = other match {
+      case Identifier(s2) => s eq s2
+      case _ => false
+    }
+
+    override def hashCode() = s.hashCode()
+  }
 
   abstract sealed class Line
   case class Label(name: Identifier) extends Line
@@ -100,6 +107,9 @@ class BasicBlockTest extends TutorialFunSuite {
     CFG(blocks, Identifier("main"))
   }
 
-  trait InterpFusedBasicBlockNoHazards extends Dsl with StateTOps {
+  trait InterpUnfusedBasicBlockNoHazards extends Dsl with StateTOps {
+    def fix[A: Manifest](f: (Rep[A => A] => Rep[A] => Rep[A])): Rep[A => A] = {
+      topFun {(x: Rep[A]) => {f(fix(f))(x)}}
+    }
   }
 }
