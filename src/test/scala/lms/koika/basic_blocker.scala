@@ -39,8 +39,15 @@ class BasicBlockTest extends TutorialFunSuite {
 
   abstract sealed class Basic extends Instruction
   case class Add(dst: Int, s1: Int, s2: Int) extends Basic
+  case class Mul(dst: Int, s1: Int, s2: Int) extends Basic
   case class Load(dst: Int, base: Int, offs: Int) extends Basic
   case class Store(src: Int, base: Int, offs: Int) extends Basic
+
+  abstract sealed class MovKind
+  case class Imm() extends MovKind
+  case class Reg() extends MovKind
+
+  case class Mov(dst: Int, src: Int, kind: MovKind) extends Basic
 
   abstract sealed class Terminator
   case class Ifz(rs: Int, then: Identifier, els: Identifier) extends Terminator
@@ -95,10 +102,16 @@ class BasicBlockTest extends TutorialFunSuite {
       case instr @ Add(_, _, _) => {
         currentBlock = currentBlock :+ instr
       }
+      case instr @ Mul(_, _, _) => {
+        currentBlock = currentBlock :+ instr
+      }
       case instr @ Load(_, _, _) => {
         currentBlock = currentBlock :+ instr
       }
       case instr @ Store(_, _, _) => {
+        currentBlock = currentBlock :+ instr
+      }
+      case instr @ Mov(_, _, _) => {
         currentBlock = currentBlock :+ instr
       }
     }
@@ -107,21 +120,21 @@ class BasicBlockTest extends TutorialFunSuite {
     CFG(blocks, Identifier("main"))
   }
 
-  trait WithProgram {
-    val program: Program
-  }
-
   trait InterpDsl extends Dsl with StateTOps {
     def step(state: Rep[StateT], instr: Basic): Rep[Unit] = {
+      state.timer = state.timer + 1
       instr match {
         case Add(dst, s1, s2) => state.regs(dst) = state.regs(s1) + state.regs(s2)
+        case Mul(dst, s1, s2) => state.regs(dst) = state.regs(s1) * state.regs(s2)
         case Load(dst, base, offs) => state.regs(dst) = state.mem(state.regs(base) + offs)
         case Store(src, base, offs) => state.mem(state.regs(base) + offs) = src
+        case Mov(dst, src, Reg()) => state.regs(dst) = state.regs(src)
+        case Mov(dst, src, Imm()) => state.regs(dst) = src
       }
     }
   }
 
-  trait InterpUnfusedBasicBlockNoHazards extends InterpDsl with WithProgram {
+  trait InterpUnfusedBasicBlockNoHazards extends InterpDsl {
     var blocks: Map[Identifier, Rep[StateT => StateT]] = Map()
 
     def fix
@@ -129,7 +142,10 @@ class BasicBlockTest extends TutorialFunSuite {
         (lbl: Identifier): Rep[StateT => StateT]
       = blocks.get(lbl) match {
           case None => {
-            val result = topFun {(x: Rep[StateT]) => {f(fix(f))(lbl)(x)}}
+            val result = topFun {
+              val fixed = f(fix(f))(lbl)
+              (x: Rep[StateT]) => fixed(x)
+            }
             blocks = blocks + (lbl -> result)
             result
           }
@@ -163,9 +179,72 @@ class BasicBlockTest extends TutorialFunSuite {
       execBlock(Identifier("main"))(state)
     }
 
-    def run(state: Rep[StateT]) = {
+    def run(program: Program, state: Rep[StateT]): Rep[StateT] = {
       val cfg = buildCFGNoHazard(program)
       runCFG(cfg, state)
     }
+  }
+
+  abstract class DslDriverX[A:Manifest,B:Manifest] extends DslDriverC[A,B] { q =>
+    val main: String = """
+int main(int argc, char *argv[]) {
+  if (argc != 2) {
+    printf("usage: %s <arg>\n", argv[0]);
+    return 0;
+  }
+  return 0;
+}
+"""
+
+    override val codegen = new DslGenC {
+      val IR: q.type = q
+
+      override def emitAll(g: lms.core.Graph, name: String)(m1:Manifest[_],m2:Manifest[_]): Unit = {
+        val ng = init(g)
+        val efs = "" //quoteEff(g.block.ein)
+        val stt = dce.statics.toList.map(quoteStatic).mkString(", ")
+        prepareHeaders
+        emitln("""
+    |/*****************************************
+    |Emitting C Generated Code
+    |*******************************************/
+    """.stripMargin)
+        val src = run(name, ng)
+        emitDefines(stream)
+        emitHeaders(stream)
+        emitFunctionDecls(stream)
+        emitDatastructures(stream)
+        emitFunctions(stream)
+        emitInit(stream)
+        emitln(s"\n/**************** $name ****************/")
+        emit(src)
+        emitln("""
+    |/*****************************************
+    |End of C Generated Code
+    |*******************************************/
+    |""".stripMargin)
+        emit(main)
+      }
+    }
+  }
+
+  def label(s: String): Label = Label(Identifier(s))
+  val i = Identifier
+
+  test("basic block output functions only") {
+    val snippet = new DslDriverX[StateT,StateT] with InterpUnfusedBasicBlockNoHazards {
+      val program = Program(Vector
+        ( Mov(1, 1, Imm())
+        , label("loop")
+        , BranchZ(0, i("exit"))
+        , Mul(1, 1, 0)
+        , Mov(2, -1, Imm())
+        , Add(0, 0, 2)
+        , label("exit")
+        , Mov(0, 1, Reg())
+        ))
+      def snippet(s: Rep[StateT]): Rep[StateT] = run(program, s)
+    }
+    check("1", snippet.code)
   }
 }
