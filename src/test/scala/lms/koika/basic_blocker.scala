@@ -179,9 +179,41 @@ class BasicBlockTest extends TutorialFunSuite {
       execBlock(Identifier("main"))(state)
     }
 
+    def runBlock(cfg: CFG, block: Block, state: Rep[StateT]): Rep[StateT] = {
+      for (instr <- block.body) {
+        step(state, instr)
+      }
+
+      block.term match {
+        case Done() => state
+        case Goto(lbl) => runLabel(cfg, lbl, state)
+        case Ifz(rs, then, els) =>
+          if (state.regs(rs) == 0) {
+            runLabel(cfg, then, state)
+          }
+          else {
+            runLabel(cfg, els, state)
+          }
+      }
+    }
+
+    def runLabel(cfg: CFG, lbl: Identifier, state: Rep[StateT]): Rep[StateT] = {
+      val f = blocks.get(lbl) match {
+        case None => {
+          val block = cfg.blocks(lbl)
+          val result = topFun { (state: Rep[StateT]) => runBlock(cfg, block, state) }
+          blocks = blocks + (lbl -> result)
+          result
+        }
+
+        case Some(f) => f
+      }
+      f(state)
+    }
+
     def run(program: Program, state: Rep[StateT]): Rep[StateT] = {
       val cfg = buildCFGNoHazard(program)
-      runCFG(cfg, state)
+      runLabel(cfg, Identifier("main"), state)
     }
   }
 
