@@ -5,15 +5,17 @@ Emitting C Generated Code
 #include <stdio.h>
 #include <stdint.h>
 #include <stdbool.h>
+/************* Function Declarations **************/
+struct StateT x1(struct StateT);
+struct StateT x3(struct StateT);
+struct StateT x5(struct StateT);
+struct StateT x7(struct StateT);
 /*********** Datastructures ***********/
 struct StateT {
   int* regs;
   int* mem;
   int timer;
 };
-
-struct StateT x5(struct StateT);
-
 /************* Functions **************/
 struct StateT x1(struct StateT x2) {
   x2.timer = x2.timer + 1;
@@ -48,18 +50,17 @@ End of C Generated Code
 #define __CPROVER_assert(b,s) 0
 #define nondet_uint() 0
 #define __CPROVER_assume(b) 0
+#else
+unsigned int nondet_uint();
 #endif
 int bounded(int low, int high) {
   int x = nondet_uint();
   __CPROVER_assume(low <= x && x <= high);
   return x;
 }
-int fact(int n) {
-  int result = 1;
-  for (int i = 1; i <= n; i += 1) {
-    result *= i;
-  }
-  return result;
+int fact(int i) {
+  if (i == 0) { return 1; }
+  return i * fact(i-1);
 }
 int main(int argc, char *argv[]) {
   if (argc != 2) {
@@ -70,7 +71,7 @@ int main(int argc, char *argv[]) {
   state.regs = calloc(8, sizeof(int));
   state.mem = calloc(1, sizeof(int));
   state.timer = 0;
-  int input = bounded(0,5);
+  int input = bounded(0, 5);
   state.regs[0] = input;
   for (int i = 1; i < 8; i += 1) {
     state.regs[i] = 0;
@@ -79,6 +80,6 @@ int main(int argc, char *argv[]) {
     state.mem[i] = 0;
   }
   state = Snippet(state);
-  __CPROVER_assert(state.regs[0] == fact(input), "incorrect evaluation");
-  return state.regs[0];
+  __CPROVER_assert(state.regs[0] == fact(input), "correct evaluation");
+  return 0;
 }

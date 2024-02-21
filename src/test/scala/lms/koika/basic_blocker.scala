@@ -10,6 +10,44 @@ import lms.macros.RefinedManifest
 
 import lms.collection.mutable._
 
+case class Identifier(s: String) {
+  override def equals(other: Any): Boolean = other match {
+    case Identifier(s2) => s eq s2
+    case _ => false
+  }
+}
+
+abstract sealed class Line
+case class Label(name: Identifier) extends Line
+
+abstract sealed class Instruction extends Line
+// Not listed under one of the more specific instructions because we want to
+// transform this into a more expressive terminator form
+case class BranchZ(rs: Int, target: Identifier) extends Instruction
+case class Branch(target: Identifier) extends Instruction
+
+abstract sealed class Basic extends Instruction
+case class Add(dst: Int, s1: Int, s2: Int) extends Basic
+case class Mul(dst: Int, s1: Int, s2: Int) extends Basic
+case class Load(dst: Int, base: Int, offs: Int) extends Basic
+case class Store(src: Int, base: Int, offs: Int) extends Basic
+
+abstract sealed class MovKind
+case object Imm extends MovKind
+case object Reg extends MovKind
+
+case class Mov(dst: Int, src: Int, kind: MovKind) extends Basic
+
+abstract sealed class Terminator
+case class Ifz(rs: Int, then: Identifier, els: Identifier) extends Terminator
+case class Goto(to: Identifier) extends Terminator
+case object Done extends Terminator
+
+case class Block(body: Vector[Basic], term: Terminator)
+
+case class Program(body: Vector[Line])
+case class CFG(blocks: Map[Identifier, Block], entry: Identifier)
+
 @virtualize
 class BasicBlockTest extends TutorialFunSuite {
   val under = "basic_blocker"
@@ -20,61 +58,25 @@ class BasicBlockTest extends TutorialFunSuite {
   override def check(label: String, code: String, suffix: String = "c") =
     super.check(label, code, suffix)
 
-  // Newtype
-  case class Identifier(s: String) {
-    override def equals(other: Any): Boolean = other match {
-      case Identifier(s2) => s eq s2
-      case _ => false
-    }
-
-    override def hashCode() = s.hashCode()
-  }
-
-  abstract sealed class Line
-  case class Label(name: Identifier) extends Line
-
-  abstract sealed class Instruction extends Line
-  // Not listed under one of the more specific instructions because we want to
-  // transform this into a more expressive terminator form
-  case class BranchZ(rs: Int, target: Identifier) extends Instruction
-  case class Branch(target: Identifier) extends Instruction
-
-  abstract sealed class Basic extends Instruction
-  case class Add(dst: Int, s1: Int, s2: Int) extends Basic
-  case class Mul(dst: Int, s1: Int, s2: Int) extends Basic
-  case class Load(dst: Int, base: Int, offs: Int) extends Basic
-  case class Store(src: Int, base: Int, offs: Int) extends Basic
-
-  abstract sealed class MovKind
-  case object Imm extends MovKind
-  case object Reg extends MovKind
-
-  case class Mov(dst: Int, src: Int, kind: MovKind) extends Basic
-
-  abstract sealed class Terminator
-  case class Ifz(rs: Int, then: Identifier, els: Identifier) extends Terminator
-  case class Goto(to: Identifier) extends Terminator
-  case object Done extends Terminator
-
-  case class Block(body: Vector[Basic], term: Terminator)
-
-  case class Program(body: Vector[Line])
-  case class CFG(blocks: Map[Identifier, Block], entry: Identifier)
-
-  @CStruct
-  case class StateT
-    ( regs: Array[Int]
-    , mem: Array[Int]
-    , timer: Int
-    )
+  // Was initially added to ease the pain of adjusting the definition of
+  // [Identifier], now left as a convenience
+  def i(s: String): Identifier = Identifier(s)
 
   var counter = 0
   def fresh(): Identifier = {
     // in a real program, this is obviously not sufficient
     val result = ".label" + counter
     counter = counter + 1
-    Identifier(result)
+    i(result)
   }
+
+  // TODO: No way to specify array length.
+  @CStruct
+  case class StateT
+    ( regs: Array[Int]
+    , mem: Array[Int]
+    , timer: Int
+    )
 
   // XXX - I bet there is a way to do this _inside_ the trait that simply
   // creates the topFun on-demand, instead of building this intermediate
@@ -83,7 +85,7 @@ class BasicBlockTest extends TutorialFunSuite {
     var blocks: Map[Identifier, Block] = Map()
 
     var currentBlock: Vector[Basic] = Vector()
-    var currentLabel = Identifier("main")
+    var currentLabel = i("main")
 
     for (line <- p.body) line match {
       case Label(name) => {
@@ -125,7 +127,7 @@ class BasicBlockTest extends TutorialFunSuite {
     }
     blocks = blocks + (currentLabel -> Block(currentBlock, Done))
 
-    CFG(blocks, Identifier("main"))
+    CFG(blocks, i("main"))
   }
 
   trait InterpDsl extends Dsl with StateTOps {
@@ -163,16 +165,14 @@ class BasicBlockTest extends TutorialFunSuite {
       }
     }
 
+    case class B(a: Vector[Basic], b: Terminator)
+
     def runLabel(cfg: CFG, lbl: Identifier, state: Rep[StateT]): Rep[StateT] = {
-      def ensure_serializable[A <: Serializable](x: A) = {}
       cfg.blocks.get(lbl) match {
         case Some(block) => {
           val f = blocks.get(lbl) match {
             case None => {
-              ensure_serializable(cfg)
-              ensure_serializable(block)
-              System.out.println(lbl);
-              val result = topFun { (st: Rep[StateT]) => block; st }
+              val result = topFun { (st: Rep[StateT]) => runBlock(cfg, block, st) }
               blocks(lbl) = result
               result
             }
@@ -187,22 +187,39 @@ class BasicBlockTest extends TutorialFunSuite {
 
     def run(program: Program, state: Rep[StateT]): Rep[StateT] = {
       val cfg = buildCFGNoHazard(program)
-      runLabel(cfg, Identifier("main"), state)
+      runLabel(cfg, i("main"), state)
     }
   }
 
   abstract class DslDriverX[A:Manifest,B:Manifest] extends DslDriverC[A,B] { q =>
-    val main: String = """
+    val header: String = ""
+    val mainBody: String
+
+    def main(): String = s"""
+#ifndef CBMC
+#define __CPROVER_assert(b,s) 0
+#define nondet_uint() 0
+#define __CPROVER_assume(b) 0
+#endif
+int bounded(int low, int high) {
+  int x = nondet_uint();
+  __CPROVER_assume(low <= x && x <= high);
+  return x;
+}
+
+$header
+
 int main(int argc, char *argv[]) {
   if (argc != 2) {
-    printf("usage: %s <arg>\n", argv[0]);
+    printf("usage: %s <arg>\\n", argv[0]);
     return 0;
   }
-  return 0;
+
+  $mainBody
 }
 """
 
-    override val codegen = new DslGenC {
+    override val codegen = new DslGenC with CCodeGenStruct {
       val IR: q.type = q
 
       override def emitAll(g: lms.core.Graph, name: String)(m1:Manifest[_],m2:Manifest[_]): Unit = {
@@ -218,7 +235,7 @@ int main(int argc, char *argv[]) {
         val src = run(name, ng)
         emitDefines(stream)
         emitHeaders(stream)
-        //emitFunctionDecls(stream)
+        emitFunctionDecls(stream)
         emitDatastructures(stream)
         emitFunctions(stream)
         emitInit(stream)
@@ -229,16 +246,41 @@ int main(int argc, char *argv[]) {
     |End of C Generated Code
     |*******************************************/
     |""".stripMargin)
-        emit(main)
+        emit(main())
       }
     }
   }
 
-  def label(s: String): Label = Label(Identifier(s))
-  val i = Identifier
+  def label(s: String): Label = Label(i(s))
 
   test("basic block output functions only") {
     val snippet = new DslDriverX[StateT,StateT] with InterpUnfusedBasicBlockNoHazards {
+      override val header = """
+int fact(int i) {
+  if (i == 0) { return 1; }
+  return i * fact(i-1);
+}
+"""
+
+      // XXX - this looks terrible
+      val mainBody = """
+  struct StateT state;
+  state.regs = calloc(8, sizeof(int));
+  state.mem = calloc(1, sizeof(int));
+  state.timer = 0;
+  int input = bounded(0, 5);
+  state.regs[0] = input;
+  for (int i = 1; i < 8; i += 1) {
+    state.regs[i] = 0;
+  }
+  for (int i = 0; i < 1; i += 1) {
+    state.mem[i] = 0;
+  }
+  state = Snippet(state);
+  __CPROVER_assert(state.regs[0] == fact(input), "correct evaluation");
+  return 0;
+"""
+
       val program = Program(Vector
         ( Mov(1, 1, Imm)
         , label("loop")
