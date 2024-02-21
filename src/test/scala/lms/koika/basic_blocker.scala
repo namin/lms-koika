@@ -1,6 +1,7 @@
 package lms.koika
 
 import scala.collection.immutable.Map
+import scala.collection.mutable.{Map => MutableMap}
 
 import lms.core.stub._
 import lms.core.virtualize
@@ -36,6 +37,7 @@ class BasicBlockTest extends TutorialFunSuite {
   // Not listed under one of the more specific instructions because we want to
   // transform this into a more expressive terminator form
   case class BranchZ(rs: Int, target: Identifier) extends Instruction
+  case class Branch(target: Identifier) extends Instruction
 
   abstract sealed class Basic extends Instruction
   case class Add(dst: Int, s1: Int, s2: Int) extends Basic
@@ -44,15 +46,15 @@ class BasicBlockTest extends TutorialFunSuite {
   case class Store(src: Int, base: Int, offs: Int) extends Basic
 
   abstract sealed class MovKind
-  case class Imm() extends MovKind
-  case class Reg() extends MovKind
+  case object Imm extends MovKind
+  case object Reg extends MovKind
 
   case class Mov(dst: Int, src: Int, kind: MovKind) extends Basic
 
   abstract sealed class Terminator
   case class Ifz(rs: Int, then: Identifier, els: Identifier) extends Terminator
   case class Goto(to: Identifier) extends Terminator
-  case class Done() extends Terminator
+  case object Done extends Terminator
 
   case class Block(body: Vector[Basic], term: Terminator)
 
@@ -97,6 +99,12 @@ class BasicBlockTest extends TutorialFunSuite {
         currentLabel = nextLabel
         currentBlock = Vector()
       }
+      case Branch(target) => {
+        val nextLabel = fresh()
+        blocks = blocks + (currentLabel -> Block(currentBlock, Goto(target)))
+        currentLabel = nextLabel
+        currentBlock = Vector()
+      }
       // XXX - This needs to be duplicated because the typechecker can't
       // determine that all non `BranchZ` instructions must be of type `Basic`.
       case instr @ Add(_, _, _) => {
@@ -115,7 +123,7 @@ class BasicBlockTest extends TutorialFunSuite {
         currentBlock = currentBlock :+ instr
       }
     }
-    blocks = blocks + (currentLabel -> Block(currentBlock, Done()))
+    blocks = blocks + (currentLabel -> Block(currentBlock, Done))
 
     CFG(blocks, Identifier("main"))
   }
@@ -128,56 +136,14 @@ class BasicBlockTest extends TutorialFunSuite {
         case Mul(dst, s1, s2) => state.regs(dst) = state.regs(s1) * state.regs(s2)
         case Load(dst, base, offs) => state.regs(dst) = state.mem(state.regs(base) + offs)
         case Store(src, base, offs) => state.mem(state.regs(base) + offs) = src
-        case Mov(dst, src, Reg()) => state.regs(dst) = state.regs(src)
-        case Mov(dst, src, Imm()) => state.regs(dst) = src
+        case Mov(dst, src, Reg) => state.regs(dst) = state.regs(src)
+        case Mov(dst, src, Imm) => state.regs(dst) = src
       }
     }
   }
 
-  trait InterpUnfusedBasicBlockNoHazards extends InterpDsl {
-    var blocks: Map[Identifier, Rep[StateT => StateT]] = Map()
-
-    def fix
-        (f: ((Identifier => Rep[StateT => StateT]) => Identifier => Rep[StateT] => Rep[StateT]))
-        (lbl: Identifier): Rep[StateT => StateT]
-      = blocks.get(lbl) match {
-          case None => {
-            val result = topFun {
-              val fixed = f(fix(f))(lbl)
-              (x: Rep[StateT]) => fixed(x)
-            }
-            blocks = blocks + (lbl -> result)
-            result
-          }
-          case Some(f) => f
-        }
-
-    def runCFG(cfg: CFG, state: Rep[StateT]) = {
-      def execBlockF
-          (f: Identifier => Rep[StateT => StateT])
-          (label: Identifier)
-          (state: Rep[StateT]): Rep[StateT] = {
-        val block = cfg.blocks(label)
-        for (instr <- block.body) {
-          step(state, instr)
-        }
-        block.term match {
-          case Done() => state
-          case Goto(lbl) => f(lbl)(state)
-          case Ifz(rs, then, els) =>
-            if (state.regs(rs) == 0) {
-              f(then)(state)
-            }
-            else {
-              f(els)(state)
-            }
-        }
-      }
-
-      val execBlock = fix(execBlockF)_
-
-      execBlock(Identifier("main"))(state)
-    }
+  trait InterpUnfusedBasicBlockNoHazards extends InterpDsl with Serializable {
+    val blocks: MutableMap[Identifier, Rep[StateT => StateT]] = MutableMap()
 
     def runBlock(cfg: CFG, block: Block, state: Rep[StateT]): Rep[StateT] = {
       for (instr <- block.body) {
@@ -185,7 +151,7 @@ class BasicBlockTest extends TutorialFunSuite {
       }
 
       block.term match {
-        case Done() => state
+        case Done => state
         case Goto(lbl) => runLabel(cfg, lbl, state)
         case Ifz(rs, then, els) =>
           if (state.regs(rs) == 0) {
@@ -198,17 +164,25 @@ class BasicBlockTest extends TutorialFunSuite {
     }
 
     def runLabel(cfg: CFG, lbl: Identifier, state: Rep[StateT]): Rep[StateT] = {
-      val f = blocks.get(lbl) match {
-        case None => {
-          val block = cfg.blocks(lbl)
-          val result = topFun { (state: Rep[StateT]) => runBlock(cfg, block, state) }
-          blocks = blocks + (lbl -> result)
-          result
+      def ensure_serializable[A <: Serializable](x: A) = {}
+      cfg.blocks.get(lbl) match {
+        case Some(block) => {
+          val f = blocks.get(lbl) match {
+            case None => {
+              ensure_serializable(cfg)
+              ensure_serializable(block)
+              System.out.println(lbl);
+              val result = topFun { (st: Rep[StateT]) => block; st }
+              blocks(lbl) = result
+              result
+            }
+            case Some(f) => f
+          }
+          f(state)
         }
 
-        case Some(f) => f
+        case None => state
       }
-      f(state)
     }
 
     def run(program: Program, state: Rep[StateT]): Rep[StateT] = {
@@ -244,7 +218,7 @@ int main(int argc, char *argv[]) {
         val src = run(name, ng)
         emitDefines(stream)
         emitHeaders(stream)
-        emitFunctionDecls(stream)
+        //emitFunctionDecls(stream)
         emitDatastructures(stream)
         emitFunctions(stream)
         emitInit(stream)
@@ -266,14 +240,15 @@ int main(int argc, char *argv[]) {
   test("basic block output functions only") {
     val snippet = new DslDriverX[StateT,StateT] with InterpUnfusedBasicBlockNoHazards {
       val program = Program(Vector
-        ( Mov(1, 1, Imm())
+        ( Mov(1, 1, Imm)
         , label("loop")
         , BranchZ(0, i("exit"))
         , Mul(1, 1, 0)
-        , Mov(2, -1, Imm())
+        , Mov(2, -1, Imm)
         , Add(0, 0, 2)
+        , Branch(i("loop"))
         , label("exit")
-        , Mov(0, 1, Reg())
+        , Mov(0, 1, Reg)
         ))
       def snippet(s: Rep[StateT]): Rep[StateT] = run(program, s)
     }
