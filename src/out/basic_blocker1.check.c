@@ -59,6 +59,7 @@ int bounded(int low, int high) {
   return x;
 }
 int fact(int i) {
+  __CPROVER_assert(0 <= i, "bad domain (fact)");
   if (i == 0) { return 1; }
   return i * fact(i-1);
 }
@@ -76,7 +77,7 @@ int main(int argc, char *argv[]) {
   for (int i = 1; i < 8; i += 1) {
     state.regs[i] = 0;
   }
-  for (int i = 0; i < 1; i += 1) {
+  for (int i = 0; i < 15; i += 1) {
     state.mem[i] = 0;
   }
   state = Snippet(state);

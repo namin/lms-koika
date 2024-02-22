@@ -200,6 +200,8 @@ class BasicBlockTest extends TutorialFunSuite {
 #define __CPROVER_assert(b,s) 0
 #define nondet_uint() 0
 #define __CPROVER_assume(b) 0
+#else
+unsigned int nondet_uint();
 #endif
 int bounded(int low, int high) {
   int x = nondet_uint();
@@ -257,6 +259,7 @@ int main(int argc, char *argv[]) {
     val snippet = new DslDriverX[StateT,StateT] with InterpUnfusedBasicBlockNoHazards {
       override val header = """
 int fact(int i) {
+  __CPROVER_assert(0 <= i, "bad domain (fact)");
   if (i == 0) { return 1; }
   return i * fact(i-1);
 }
@@ -273,7 +276,7 @@ int fact(int i) {
   for (int i = 1; i < 8; i += 1) {
     state.regs[i] = 0;
   }
-  for (int i = 0; i < 1; i += 1) {
+  for (int i = 0; i < 15; i += 1) {
     state.mem[i] = 0;
   }
   state = Snippet(state);
