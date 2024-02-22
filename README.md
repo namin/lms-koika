@@ -1,6 +1,18 @@
-# LMS Koika
+# LMS-Koika: Collapsing Towers for Side-Channel Security
 
-An early experiment.
+LMS-Koika is an attempt to use staged programming to detect side-channel
+vulnerabilities in hardware-software systems via the [Collapsing Towers of
+Interpreters](https://www.cs.purdue.edu/homes/rompf/papers/amin-popl18.pdf)
+pattern. The basic idea is to take a staged hardware interpreter (including
+micro-architectural details like speculation and data caching) alongside an
+assembly program intended to run on that hardware to produce a *residue* C
+program that is semantically equivalent to the original assembly program, but
+with all side-channel information encoded explicitly. The C file can then be
+analyzed by an off-the-shelf analyzer (we use CBMC) to check whether timing
+information and secret inputs are noninterfering.
+
+As an example, see [interpcc.scala](src/test/scala/lms/koika/interpcc.scala) and
+one of its residues, such as [interpcc_2ct_ni.check.c](src/out/interpcc_2ct_ni.check.c).
 
 ## Run
 - `sbt test`
