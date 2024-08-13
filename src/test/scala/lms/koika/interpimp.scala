@@ -9,7 +9,7 @@ import lms.macros.SourceContext
 import lms.macros.RefinedManifest
 
 // TODO: While might not be expressive enough to be interesting here.
-object WhileLang {
+object ImpLang {
   abstract sealed class Expr
   abstract sealed class Stmt
   abstract sealed class Cond
@@ -64,10 +64,10 @@ object WhileLang {
 }
 
 @virtualize
-class WhileTest extends TutorialFunSuite {
-  val under = "while_"
+class ImpTest extends TutorialFunSuite {
+  val under = "interpimp_"
 
-  import WhileLang._
+  import ImpLang._
 
   override def exec(label: String, code: String, suffix: String = "c") =
     super.exec(label, code, suffix)
