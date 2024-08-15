@@ -15,6 +15,7 @@ object ImpLang {
 
   case class I(n: Int) extends Expr
   case class V(id: String) extends Expr
+  case class Deref(e: Expr) extends Expr
   case class Mul(e1: Expr, e2: Expr) extends Expr
   case class Add(e1: Expr, e2: Expr) extends Expr
 
@@ -22,35 +23,36 @@ object ImpLang {
   case object F extends Cond
   case class Eq(e1: Expr, e2: Expr) extends Cond
   case class Le(e1: Expr, e2: Expr) extends Cond
-  case class Neg(c: Cond) extends Cond
+  case class Not(c: Cond) extends Cond
   case class And(c1: Cond, c2: Cond) extends Cond
 
-  def allVars(prg: List[Stmt]): Set[String] = {
-    prg.foldLeft[Set[String]](Set())((acc, st) => acc union allVarsS(st))
+  def vars(prg: List[Stmt]): Set[String] = {
+    prg.foldLeft[Set[String]](Set())((acc, st) => acc union varsS(st))
   }
 
-  def allVarsS(s: Stmt): Set[String] = s match {
-    case Assign(id, e) => Set(id) union allVarsE(e)
+  def varsS(s: Stmt): Set[String] = s match {
+    case Assign(id, e) => Set(id) union varsE(e)
     case Skip => Set()
-    case IfThen(c, tthen, els) => allVarsC(c) union allVars(tthen) union allVars(els)
-    case While(c, body) => allVarsC(c) union allVars(body)
+    case IfThen(c, tthen, els) => varsC(c) union vars(tthen) union vars(els)
+    case While(c, body) => varsC(c) union vars(body)
     case PrintT(t) => Set()
-    case PrintExp(e) => allVarsE(e)
+    case PrintExp(e) => varsE(e)
   }
 
-  def allVarsE(e: Expr): Set[String] = e match {
+  def varsE(e: Expr): Set[String] = e match {
     case I(n) => Set()
     case V(id) => Set(id)
-    case Mul(e1, e2) => allVarsE(e1) union allVarsE(e2)
-    case Add(e1, e2) => allVarsE(e1) union allVarsE(e2)
+    case Deref(e) => varsE(e)
+    case Mul(e1, e2) => varsE(e1) union varsE(e2)
+    case Add(e1, e2) => varsE(e1) union varsE(e2)
   }
 
-  def allVarsC(c: Cond): Set[String] = c match {
+  def varsC(c: Cond): Set[String] = c match {
     case T => Set()
     case F => Set()
-    case Eq(e1, e2) => allVarsE(e1) union allVarsE(e2)
-    case Le(e1, e2) => allVarsE(e1) union allVarsE(e2)
-    case Neg(c) => allVarsC(c)
-    case And(c1, c2) => allVarsC(c1) union allVarsC(c2)
+    case Eq(e1, e2) => varsE(e1) union varsE(e2)
+    case Le(e1, e2) => varsE(e1) union varsE(e2)
+    case Not(c) => varsC(c)
+    case And(c1, c2) => varsC(c1) union varsC(c2)
   }
 }
