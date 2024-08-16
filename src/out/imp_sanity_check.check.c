@@ -17,7 +17,7 @@ struct ProgramStateT Snippet(struct ProgramStateT x0) {
   x1[0] = 1;
   x1[1] = 1;
   while (x1[0] == 1 && x1[1] <= 5) {
-    if (!(x2[x1[1]] == x2[x1[1] + 10])) x1[0] = 0;
+    if (!(x2[x1[1]] == x2[x1[1] + 20])) x1[0] = 0;
     x1[1] = x1[1] + 1;
   }
   x0.vars = x1;

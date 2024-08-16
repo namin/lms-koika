@@ -72,13 +72,21 @@ class ImpTest extends TutorialFunSuite {
     }
   }
 
+  val mem_size = 30;
+  val secret_size = 5;
+  val secret_offset = 20;
+
   // TODO (cam): this is a hack to wrap up these two arrays into one logical
   // input.
   @CStruct
   case class ProgramStateT(vars: Array[Int], mem: Array[Int])
 
-  trait InterpImpUntimed extends Dsl with StateOps with ArrayOps with ProgramStateTOps {
-    class BasicState private (
+  trait InterpImpUntimed extends Dsl
+    with StateOps
+    with ArrayOps
+    with ProgramStateTOps
+  {
+    class State private (
       varLookup: Map[String, Int],
       vars: Rep[Array[Int]],
       mem: Rep[Array[Int]]
@@ -92,11 +100,73 @@ class ImpTest extends TutorialFunSuite {
       def decompose(): (Rep[Array[Int]], Rep[Array[Int]]) = (vars, mem)
     }
 
-    object BasicState {
-      def init(prg: List[Stmt], st: Rep[ProgramStateT]): BasicState = {
+    object State {
+      def init(prg: List[Stmt], st: Rep[ProgramStateT]): State = {
         val prgVars = vars(prg)
         val varLookup = prgVars.toList.zipWithIndex.toMap
-        new BasicState(varLookup, st.vars, st.mem)
+        new State(varLookup, st.vars, st.mem)
+      }
+    }
+  }
+
+  @CStruct
+  case class TimedStateT(
+    vars: Array[Int],
+    mem: Array[Int],
+    timer: Int
+  )
+
+  trait InterpImpTimed extends Dsl
+    with StateOps
+    with ArrayOps
+    with TimedStateTOps
+  {
+    class State private (
+      varLookup: Map[String, Int],
+      inner: Rep[TimedStateT]
+    ) extends AbstractRepState {
+      def readVar(ident: String): Rep[Int] = inner.vars(varLookup(ident))
+      def writeVar(ident: String, v: Rep[Int]): Rep[Unit] = inner.vars(varLookup(ident)) = v
+
+      def readMem(idx: Rep[Int]): Rep[Int] = inner.mem(idx)
+      def writeMem(idx: Rep[Int], v: Rep[Int]): Rep[Unit] = inner.mem(idx) = v
+
+      override def execS(s: Stmt): Rep[Unit] = {
+        inner.timer += 1
+        super.execS(s)
+      }
+
+      override def evalE(e: Expr): Rep[Int] = {
+        e match {
+          case I(n) => ()
+          case V(id) => ()
+          case Deref(e) => ()
+          case Mul(e1, e2) => inner.timer += 1
+          case Add(e1, e2) => inner.timer += 1
+        }
+        super.evalE(e)
+      }
+
+      override def evalC(c: Cond): Rep[Boolean] = {
+        c match {
+          case T => ()
+          case F => ()
+          case Eq(e1, e2) => inner.timer += 1
+          case Le(e1, e2) => inner.timer += 1
+          case Not(c) => inner.timer += 1
+          case And(c1, c2) => inner.timer += 1
+        }
+        super.evalC(c)
+      }
+
+      def unwrap(): Rep[TimedStateT] = inner
+    }
+
+    object State {
+      def init(prg: List[Stmt], st: Rep[TimedStateT]): State = {
+        val prgVars = vars(prg)
+        val varLookup = prgVars.toList.zipWithIndex.toMap
+        new State(varLookup, st)
       }
     }
   }
@@ -111,6 +181,8 @@ int main(int argc, char *argv[]) {
   return 0;
 }
 """
+
+    def dyn(): String
 
     override val codegen = new DslGenC with CCodeGenStruct {
       val IR: q.type = q
@@ -139,6 +211,7 @@ int main(int argc, char *argv[]) {
     |End of C Generated Code
     |*******************************************/
     |""".stripMargin)
+        emit(dyn)
         emit(main)
       }
     }
@@ -150,13 +223,84 @@ int main(int argc, char *argv[]) {
   {
     val prog: List[Stmt]
 
+    def dyn() = ""
+
     def snippet(s: Rep[ProgramStateT]): Rep[ProgramStateT] = {
-      val ctx = BasicState.init(prog, s)
+      val ctx = State.init(prog, s)
       ctx.exec(prog)
       val (vars, mem) = ctx.decompose()
       s.vars = vars
       s.mem = mem
       s
+    }
+  }
+
+  abstract class TimedImpDriver
+    extends DslDriverX[TimedStateT, TimedStateT]
+    with InterpImpTimed
+  {
+    val prog: List[Stmt]
+
+    def dyn(): String = {
+      val num_vars = vars(prog).size
+
+      s"""
+#define MEM_SIZE $mem_size
+#define SECRET_SIZE $secret_size
+#define SECRET_OFFSET $secret_offset
+int bounded(int low, int high) {
+  int x = nondet_uint();
+  if (x < low) {
+    x = low;
+  }
+  if (x > high) {
+    x = high;
+  }
+  return x;
+}
+void init(struct TimedStateT *st) {
+  st->timer = 0;
+  st->mem = calloc(sizeof(int), MEM_SIZE);
+  st->vars = calloc(sizeof(int), $num_vars);
+}
+"""
+    }
+
+    override val main = """
+int main(int argc, char* argv[]) {
+  struct TimedStateT s1;
+  init(&s1);
+  struct TimedStateT s2;
+  init(&s2);
+
+  int i;
+  int x;
+
+  // initialize input
+  // TODO (cwong): this is ugly
+  for (i=0; i<SECRET_SIZE; i++) {
+    x = bounded(0, 20);
+    s1.mem[i] = x;
+    s2.mem[i] = x;
+  }
+
+  // initialize secret
+  for (i=0; i<SECRET_SIZE; i++) {
+    s1.mem[i+SECRET_OFFSET] = bounded(0, 20);
+    s2.mem[i+SECRET_OFFSET] = bounded(0, 20);
+  }
+
+  struct TimedStateT s1_ = Snippet(s1);
+  struct TimedStateT s2_ = Snippet(s2);
+  __CPROVER_assert(s1_.timer==s2_.timer, "timing leak");
+  return 0;
+}
+"""
+
+    def snippet(s: Rep[TimedStateT]): Rep[TimedStateT] = {
+      val ctx = State.init(prog, s)
+      ctx.exec(prog)
+      ctx.unwrap()
     }
   }
 
@@ -175,12 +319,12 @@ int main(int argc, char *argv[]) {
       Assign("result", I(1)),
       Assign("i", I(1)),
       While(
-        And(Eq(V("result"), I(1)), Le(V("i"), I(5))),
+        And(Eq(V("result"), I(1)), Le(V("i"), I(secret_size))),
         List(
           IfThen(
             Not(Eq(
               Deref(V("i")),
-              Deref(Add(V("i"), I(10)))
+              Deref(Add(V("i"), I(secret_offset)))
             )),
             List(Assign("result", I(0))),
             List(),
@@ -190,10 +334,17 @@ int main(int argc, char *argv[]) {
       ),
     )
 
-  test("shortCircuit_untimed") {
+  test("sanity_check") {
     val snippet = new UntimedImpDriver {
       override val prog = shortCircuitLoop
     }
-    check("shortCircuit_untimed", snippet.code)
+    check("sanity_check", snippet.code)
+  }
+
+  test("shortCircuit_timed") {
+    val snippet = new TimedImpDriver {
+      override val prog = shortCircuitLoop
+    }
+    check("shortCircuit_timed", snippet.code)
   }
 }

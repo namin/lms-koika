@@ -5,6 +5,6 @@
 
 for file in $@; do
     echo "Verifying $file"
-    cbmc -DCBMC --beautify --verbosity 4 --slice-formula --unwind 1000 --refine --compact-trace $file
+    cbmc -DCBMC --verbosity 4 --slice-formula --unwind 1000 --refine --compact-trace $file
 done
 
