@@ -10,47 +10,51 @@ import lms.macros.RefinedManifest
 
 import lms.collection.mutable._
 
-case class Identifier(s: String) {
-  override def equals(other: Any): Boolean = other match {
-    case Identifier(s2) => s eq s2
-    case _ => false
+object Asm {
+  case class Identifier(s: String) {
+    override def equals(other: Any): Boolean = other match {
+      case Identifier(s2) => s eq s2
+      case _ => false
+    }
   }
+
+  abstract sealed class Line
+  case class Label(name: Identifier) extends Line
+
+  abstract sealed class Instruction extends Line
+  // Not listed under one of the more specific instructions because we want to
+  // transform this into a more expressive terminator form
+  case class BranchZ(rs: Int, target: Identifier) extends Instruction
+  case class Branch(target: Identifier) extends Instruction
+
+  abstract sealed class Basic extends Instruction
+  case class Add(dst: Int, s1: Int, s2: Int) extends Basic
+  case class Mul(dst: Int, s1: Int, s2: Int) extends Basic
+  case class Load(dst: Int, base: Int, offs: Int) extends Basic
+  case class Store(src: Int, base: Int, offs: Int) extends Basic
+
+  abstract sealed class MovKind
+  case object Imm extends MovKind
+  case object Reg extends MovKind
+
+  case class Mov(dst: Int, src: Int, kind: MovKind) extends Basic
+
+  abstract sealed class Terminator
+  case class Ifz(rs: Int, tthen: Identifier, els: Identifier) extends Terminator
+  case class Goto(to: Identifier) extends Terminator
+  case object Done extends Terminator
+
+  case class Block(body: Vector[Basic], term: Terminator)
+
+  case class Program(body: Vector[Line])
+  case class CFG(blocks: Map[Identifier, Block], entry: Identifier)
 }
-
-abstract sealed class Line
-case class Label(name: Identifier) extends Line
-
-abstract sealed class Instruction extends Line
-// Not listed under one of the more specific instructions because we want to
-// transform this into a more expressive terminator form
-case class BranchZ(rs: Int, target: Identifier) extends Instruction
-case class Branch(target: Identifier) extends Instruction
-
-abstract sealed class Basic extends Instruction
-case class Add(dst: Int, s1: Int, s2: Int) extends Basic
-case class Mul(dst: Int, s1: Int, s2: Int) extends Basic
-case class Load(dst: Int, base: Int, offs: Int) extends Basic
-case class Store(src: Int, base: Int, offs: Int) extends Basic
-
-abstract sealed class MovKind
-case object Imm extends MovKind
-case object Reg extends MovKind
-
-case class Mov(dst: Int, src: Int, kind: MovKind) extends Basic
-
-abstract sealed class Terminator
-case class Ifz(rs: Int, then: Identifier, els: Identifier) extends Terminator
-case class Goto(to: Identifier) extends Terminator
-case object Done extends Terminator
-
-case class Block(body: Vector[Basic], term: Terminator)
-
-case class Program(body: Vector[Line])
-case class CFG(blocks: Map[Identifier, Block], entry: Identifier)
 
 @virtualize
 class BasicBlockTest extends TutorialFunSuite {
   val under = "basic_blocker"
+
+  import Asm._
 
   override def exec(label: String, code: String, suffix: String = "c") =
     super.exec(label, code, suffix)
@@ -155,9 +159,9 @@ class BasicBlockTest extends TutorialFunSuite {
       block.term match {
         case Done => state
         case Goto(lbl) => runLabel(cfg, lbl, state)
-        case Ifz(rs, then, els) =>
+        case Ifz(rs, tthen, els) =>
           if (state.regs(rs) == 0) {
-            runLabel(cfg, then, state)
+            runLabel(cfg, tthen, state)
           }
           else {
             runLabel(cfg, els, state)
