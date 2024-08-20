@@ -9,3 +9,4 @@ timingInv.log
 .metals/
 .scalafmt.conf
 *.actual.*
+.bsp/*
