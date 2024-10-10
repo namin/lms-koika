@@ -21,8 +21,5 @@ addCompilerPlugin("org.scalamacros" % "paradise" % paradiseVersion cross CrossVe
 // tests are not thread safe
 parallelExecution in Test := false
 
-lazy val koika = (project in file(".")).dependsOn(lms % "test->test")
-  // .settings(fork := true)
-
 lazy val lms = (project in file("vendor/lms-clean"))
-  // .settings(fork := true)
+lazy val koika = (project in file(".")).dependsOn(lms)
