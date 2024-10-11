@@ -23,6 +23,7 @@ object NanoRisc {
   case object Eq extends Cmp
   case object Ne extends Cmp
   case object Lt extends Cmp
+  case object Ge extends Cmp
 
   abstract sealed class Op
   case object Plus extends Op
@@ -30,10 +31,11 @@ object NanoRisc {
   case object Mul extends Op
 
   abstract sealed class Instr
-  case class Binop(op: Op, rd: Reg, rs1: Reg, rs2: Operand) extends Instr
-  case class Load(rd: Reg, rs: Reg, im: Imm) extends Instr
-  case class Store(rd: Reg, rs: Reg, im: Imm) extends Instr
-  case class B(cmp: Option[(Cmp, Reg, Reg)], tgt: Addr) extends Instr
+  case class Mov(dst: Reg, src: Operand) extends Instr
+  case class Binop(op: Op, dst: Reg, src1: Reg, src2: Operand) extends Instr
+  case class Load(dst: Reg, src: Reg, offs: Operand) extends Instr
+  case class Store(dst: Reg, src: Reg, offs: Operand) extends Instr
+  case class B(cmp: Option[(Cmp, Reg, Operand)], tgt: Addr) extends Instr
 
   // CR-someday cwong: It'd be nice to be able to just say [op.eval] instead of
   // [eval_op]. Look into using implicits for this.
@@ -43,6 +45,7 @@ object NanoRisc {
         case Eq => op1 == op2
         case Ne => op1 != op2
         case Lt => op1 < op2
+        case Ge => op1 >= op2
       }
 
     def eval_op(op: Op, op1: Rep[Int], op2: Rep[Int]): Rep[Int] =

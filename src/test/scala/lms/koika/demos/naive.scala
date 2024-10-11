@@ -7,10 +7,12 @@ import lms.macros.RefinedManifest
 import lms.collection.mutable._
 
 import lms.koika._
-import lms.koika.frontend.NanoRisc
+import lms.koika.frontend.NanoRisc._
 
 @virtualize
-class NanoRiscNaiveTest extends TutorialFunSuite {
+class NanoRiscNaiveTests extends TutorialFunSuite {
+  import KoikaInterp.StateT
+
   val under = "demos/naive_"
 
   override def exec(label: String, code: String, suffix: String = "c") =
@@ -19,8 +21,20 @@ class NanoRiscNaiveTest extends TutorialFunSuite {
   override def check(label: String, code: String, suffix: String = "c") =
     super.check(label, code, suffix)
 
-  abstract class DslDriver[A:Manifest, B:Manifest] extends DslDriverC[A,B] { q =>
-    val main: String = """
-    """
+  trait NaiveDriver extends GenericKoikaDriver[StateT, StateT] with KoikaInterp.Naive {
+    // In the naive driver, we don't use caching or speculation, so we don't
+    // need to initialize everything except [regs], [timer] and [mem].
+    override val init = s"""
+void init(struct $stateT *s) {
+  s->regs = calloc(sizeof(int), NUM_REGS);
+  for (int i=0; i<NUM_REGS; i++) {
+    s->regs[i] = 0;
+  }
+  s->timer = 0;
+  s->mem = calloc(sizeof(int), MEM_SIZE);
+  for (int i=0; i<MEM_SIZE; i++) {
+    s->mem[i] = 0;
+  }
+}"""
   }
 }
