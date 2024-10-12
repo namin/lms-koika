@@ -43,9 +43,6 @@ object NanoRiscDemos {
       B(Some((Ge,r4,Imm(password_size))),Addr(11)),
       Load(r0,r2,r4),
       Load(r1,r3,r4),
-      // CR cam: I am losing my mind. If we change this `Ne` to anything other
-      // than `Eq`, then everything works properly. With either `Ne` or `Eq`,
-      // however, it thinks the branch is always taken. WTF?
       B(Some((Ne,r0,r1)),Addr(9)),
       Binop(Plus,r4,r4,Imm(1)),
       B(None,Addr(3)),

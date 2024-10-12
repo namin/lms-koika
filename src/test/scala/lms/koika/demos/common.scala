@@ -83,6 +83,18 @@ object KoikaInterp {
     override def set_mem(s: Rep[StateT], i: Rep[Int], v: Rep[Int]): Rep[Unit] =
       s.mem(i) = v
 
+    // CR-someday cwong: This needs to be defined here, for some reason -- if
+    // we leave this function defined in `NanoRisc.Ops`, LMS seems to always
+    // believe that the `Eq` and `Ne` cases are always true (and wrongly DCEs
+    // accordingly).
+    override def eval_cmp(cmp: Cmp, op1: Rep[Int], op2: Rep[Int]): Rep[Boolean] =
+      cmp match {
+        case Eq => op1 == op2
+        case Ne => op1 != op2
+        case Lt => op1 < op2
+        case Ge => op1 >= op2
+      }
+
     def execute(i: Int, s: Rep[StateT]): Rep[StateT] =
       if (i < prog.length) {
         tick(s)
