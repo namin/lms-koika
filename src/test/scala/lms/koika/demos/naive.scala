@@ -11,7 +11,7 @@ import lms.koika.frontend.NanoRisc._
 
 @virtualize
 class NanoRiscNaiveTests extends TutorialFunSuite {
-  import KoikaInterp.StateT
+  import KoikaInterp._
 
   val under = "demos/naive_"
 
@@ -36,5 +36,19 @@ void init(struct $stateT *s) {
     s->mem[i] = 0;
   }
 }"""
+  }
+
+  test("nanorisc naive shortcircuit") {
+    val snippet = new NaiveDriver {
+      override val prog = NanoRiscDemos.build_shortcircuit_demo(secret_offset, secret_size)
+
+      override val initialize_input = """
+for (int i=0; i<SECRET_SIZE; i++) {
+  int x = bounded(0, 20);
+  s1.mem[i] = x;
+  s2.mem[i] = x;
+}"""
+    }
+    check("shortcircuit", snippet.code)
   }
 }

@@ -66,6 +66,8 @@ object KoikaInterp {
       else {
         execute(i, s)
       }
+
+    def snippet(s: Rep[StateT]): Rep[StateT] = call(0, s)
   }
 
   trait Naive extends Common {
@@ -101,16 +103,14 @@ object KoikaInterp {
             set_mem(s, operand(s, src) + operand(s, im), operand(s, dst))
             call(i+1, s)
           }
-          case B(mcmp, tgt) => mcmp match {
-            case None => call(tgt.unAddr, s)
-            case Some((cmp, src1, src2)) =>
-              if (eval_cmp(cmp, operand(s, src1), operand(s, src2))) {
-                call(tgt.unAddr, s)
-              }
-              else {
-                call(i+1, s)
-              }
-          }
+          case B(None, tgt) => call(tgt.unAddr, s)
+          case B(Some((cmp, src1, src2)), tgt) =>
+            if (eval_cmp(cmp, operand(s, src1), operand(s, src2))) {
+              call(tgt.unAddr, s)
+            }
+            else {
+              call(i+1, s)
+            }
         }
       }
       else {
@@ -126,18 +126,19 @@ abstract class GenericKoikaDriver[A:Manifest, B:Manifest] extends DslDriverC[A,B
   val secret_offset: Int = 20
 
   val header: String = s"""
-#define NUM_REGS $mem_size
+#define NUM_REGS $num_regs
+#define MEM_SIZE $mem_size
 #define SECRET_SIZE $secret_size
 #define SECRET_OFFSET $secret_offset
+#ifndef CBMC
+#define __CPROVER_assert(b,s) 0
+#define nondet_uint() 0
+#else
 int nondet_uint();
+#endif
 int bounded(int low, int high) {
-int x = nondet_uint();
-  if (x < low) {
-    x = low;
-  }
-  if (x > high) {
-    x = high;
-  }
+  int x = nondet_uint();
+  __CPROVER_assume(low <= x && x <= high);
   return x;
 }"""
 
@@ -151,12 +152,12 @@ s2.regs[0] = x;"""
 
   val initialize_secret: String = """
 // initialize secret
-for (i=0; i<SECRET_SIZE; i++) {
-  s1.mem[i+SECRET_OFFSET] = bounded(0, 20);
-  s2.mem[i+SECRET_OFFSET] = bounded(0, 20);
+for (int i=0; i<SECRET_SIZE; i++) {
+  s1.mem[SECRET_OFFSET+i] = bounded(0, 20);
+  s2.mem[SECRET_OFFSET+i] = bounded(0, 20);
 }"""
 
-  val main: String = s"""
+  def main: String = s"""
 $header
 $init
 int main(int argc, char* argv[]) {
