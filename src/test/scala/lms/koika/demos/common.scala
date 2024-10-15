@@ -18,14 +18,14 @@ object KoikaInterp {
     ( regs: Array[Int]
     , mem: Array[Int]
     , saved_regs: Array[Int]
-    , cache_key: Int
-    , cache_val: Int
+    , cache_keys: Array[Int]
+    , cache_vals: Array[Int]
     , timer: Int
     )
 
   trait Common extends Dsl with NanoRisc.Ops with StateTOps {
     val prog: Vector[NanoRisc.Instr]
-    val useCache: Boolean
+    def useCache: Boolean
 
     lazy val cache: Array[Option[Rep[StateT => StateT]]] =
       (for (p <- prog) yield None).toArray
@@ -71,7 +71,7 @@ object KoikaInterp {
   }
 
   trait Naive extends Common {
-    override val useCache = true
+    override def useCache = true
 
     override def get_reg(s: Rep[StateT], i: Rep[Int]): Rep[Int] =
       s.regs(i)
@@ -128,6 +128,142 @@ object KoikaInterp {
       else {
         s
       }
+  }
+
+  trait Cached extends Naive {
+    def pushLRU(s: Rep[StateT], addr: Rep[Int], v: Rep[Int]): Rep[Unit] = {
+      s.cache_keys(1) = s.cache_keys(0)
+      s.cache_vals(1) = s.cache_vals(0)
+
+      s.cache_keys(0) = addr
+      s.cache_vals(0) = v
+    }
+
+    def runCache(s: Rep[StateT], addr: Rep[Int], v: Option[Rep[Int]]): Rep[Int] = {
+      if (s.cache_keys(0) == addr) {
+        // address is in cache, return value
+        v match {
+          case Some(x) => {
+            s.cache_vals(0) = x
+            x
+          }
+          case None => s.cache_vals(0)
+        }
+      }
+      else if (s.cache_keys(1) == addr) {
+        // key is at tail of LRU queue, so set addr as head
+        val result = v match {
+          case Some(x) => x
+          case None => s.cache_vals(1)
+        }
+
+        pushLRU(s, addr, result)
+
+        s.timer += 1
+        result
+      }
+      else {
+        // address not in cache
+        val result = v match {
+          case Some(x) => x
+          case None => s.mem(addr)
+        }
+
+        // evict LRU and write back to memory
+        s.mem(s.cache_keys(1)) = s.cache_vals(1)
+
+        pushLRU(s, addr, result)
+
+        s.timer += 100
+
+        result
+      }
+    }
+
+    override def get_mem(s: Rep[StateT], addr: Rep[Int]): Rep[Int] =
+      runCache(s, addr, None)
+
+    override def set_mem(s: Rep[StateT], addr: Rep[Int], v: Rep[Int]): Rep[Unit] = {
+      runCache(s, addr, Some(v))
+      unit(())
+    }
+  }
+
+  trait Speculative extends Cached {
+    val savedRegisters = scala.collection.mutable.Set[Reg]()
+
+    def saveForRollback(s: Rep[StateT], instr: Instr): Rep[Unit] = {
+      instr match {
+        case Load(rd, _, _) => {
+          if (!savedRegisters.contains(rd)) {
+            s.saved_regs(rd.unReg) = get_reg(s, rd.unReg)
+            savedRegisters += rd
+          }
+        }
+        case _ => ()
+      }
+      unit(())
+    }
+    def rollback(s: Rep[StateT]): Rep[Unit] = {
+      s.timer += 100
+      for (rd <- savedRegisters) {
+        set_reg(s, rd.unReg, s.saved_regs(rd.unReg))
+      }
+      unit(())
+    }
+    def resetSaved(): Unit = { savedRegisters.clear() }
+
+    var inBranch: Option[B] = None
+
+    override def useCache: Boolean = inBranch == None
+    override def execute(i: Int, s: Rep[StateT]): Rep[StateT] = inBranch match {
+      case None =>
+        (i < prog.length, prog(i)) match {
+          case (true, B(Some(cnd), tgt)) if tgt.unAddr > i => {
+            inBranch = Some(B(Some(cnd), tgt))
+            call(i+1, s)
+          }
+          case _ => super.execute(i, s)
+        }
+      case Some(B(Some((cmp, src1, src2)), tgt)) => {
+        if (i == tgt.unAddr) {
+          inBranch = None
+          if (eval_cmp(cmp, operand(s, src1), operand(s, src2))) {
+            rollback(s)
+            call(tgt.unAddr, s)
+          }
+          resetSaved()
+          s
+        }
+        else if (i < prog.length) {
+          prog(i) match {
+            case Load(rd, rs, imm) if rd != rs => {
+              saveForRollback(s, Load(rd, rs, imm))
+              super.execute(i, s)
+            }
+            case _ => {
+              var result: Rep[StateT] = s
+              inBranch = None
+              if (eval_cmp(cmp, operand(s, src1), operand(s, src2))) {
+                rollback(s)
+                result = call(tgt.unAddr, s)
+              }
+              else {
+                result = super.execute(i, s)
+              }
+              resetSaved();
+              result
+            }
+          }
+        }
+        else {
+          s
+        }
+      }
+      case _ => {
+        super.execute(i, s)
+      }
+    }
   }
 }
 

@@ -51,12 +51,19 @@ object NanoRiscDemos {
       Mov(r0,Imm(1)),
     )
 
+  def spec_small: Vector[Instr] =
+    Vector(B(Some((Eq, Reg(0), Imm(0))), Addr(3)),
+           Load(r1, r0, Imm(0)),
+           Load(r2, r1, Imm(4)))
+
   def build_spectre_demo(secret_offset: Int): Vector[Instr] =
     Vector(
+      Mov(r4,r0),
       Mov(r3,Imm(secret_offset-8)),
       Mov(r0,Imm(9)),
-      B(Some(Ge,r0,Imm(8)),Addr(5)),
+      B(Some(Ge,r0,Imm(8)),Addr(6)),
       Load(r1,r3,r0),
-      Load(r2,r1,Imm(0))
+      Load(r2,r1,Imm(0)),
+      Load(r0,r4,Imm(0))
     )
 }
