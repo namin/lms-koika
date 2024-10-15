@@ -16,11 +16,11 @@ object NanoRiscDemos {
   def build_shortcircuit_demo(secret_offset: Int, password_size: Int): Vector[Instr] =
     /*
      * mov r2, #0
-     * mov r3, #20
+     * mov r3, #secret_offset
      * mov r4, #0
      * 
      * loop:
-     * bge r4, #10, right
+     * bge r4, #password_size, right
      * ldr r0, [r2, r4]
      * ldr r1, [r3, r4]
      * bne r0, r1, wrong
@@ -49,5 +49,14 @@ object NanoRiscDemos {
       Mov(r0,Imm(0)),
       B(None,Addr(12)),
       Mov(r0,Imm(1)),
+    )
+
+  def build_spectre_demo(secret_offset: Int): Vector[Instr] =
+    Vector(
+      Mov(r3,Imm(secret_offset-8)),
+      Mov(r0,Imm(9)),
+      B(Some(Ge,r0,Imm(8)),Addr(5)),
+      Load(r1,r3,r0),
+      Load(r2,r1,Imm(0))
     )
 }

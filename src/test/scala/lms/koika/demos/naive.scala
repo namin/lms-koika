@@ -51,4 +51,11 @@ for (int i=0; i<SECRET_SIZE; i++) {
     }
     check("shortcircuit", snippet.code)
   }
+
+  test("nanorisc naive spectre") {
+    val snippet = new NaiveDriver {
+      override val prog = NanoRiscDemos.build_spectre_demo(secret_offset)
+    }
+    check("spectre", snippet.code)
+  }
 }
