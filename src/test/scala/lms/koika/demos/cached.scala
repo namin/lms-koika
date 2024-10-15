@@ -49,6 +49,6 @@ void init(struct $stateT *s) {
     val snippet = new Driver {
       override val prog = NanoRiscDemos.build_spectre_demo(secret_offset)
     }
-    //check("spectre", snippet.code)
+    check("spectre", snippet.code)
   }
 }
