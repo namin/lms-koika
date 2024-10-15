@@ -205,7 +205,7 @@ object KoikaInterp {
       unit(())
     }
     def rollback(s: Rep[StateT]): Rep[Unit] = {
-      s.timer += 100
+      s.timer += 15
       for (rd <- savedRegisters) {
         set_reg(s, rd.unReg, s.saved_regs(rd.unReg))
       }
@@ -237,7 +237,7 @@ object KoikaInterp {
         }
         else if (i < prog.length) {
           prog(i) match {
-            case Load(rd, rs, imm) if rd != rs => {
+            case Load(rd, rs, imm) if rd != src1 && rd != src2 => {
               saveForRollback(s, Load(rd, rs, imm))
               super.execute(i, s)
             }
@@ -251,7 +251,7 @@ object KoikaInterp {
               else {
                 result = super.execute(i, s)
               }
-              resetSaved();
+              resetSaved()
               result
             }
           }

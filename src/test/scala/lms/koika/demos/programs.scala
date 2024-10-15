@@ -18,7 +18,7 @@ object NanoRiscDemos {
      * mov r2, #0
      * mov r3, #secret_offset
      * mov r4, #0
-     * 
+     *
      * loop:
      * bge r4, #password_size, right
      * ldr r0, [r2, r4]
@@ -26,15 +26,18 @@ object NanoRiscDemos {
      * bne r0, r1, wrong
      * add r4, r4, #1
      * b loop
-     * 
+     *
      * wrong:
      * mov r0, #0
      * b done
-     * 
+     *
      * right:
      * mov r0, #1
-     * 
+     *
      * done:
+     *
+     * Standard short-circuiting password-checker loop, leaks whether some
+     * prefix of the guess is correct.
      */
     Vector(
       Mov(r2,Imm(0)),
@@ -51,19 +54,23 @@ object NanoRiscDemos {
       Mov(r0,Imm(1)),
     )
 
+  /* beq r0, #0, done
+   * ldr r1, [r0]
+   * ldr r2, [r1, #4]
+   *
+   * done
+   */
   def spec_small: Vector[Instr] =
-    Vector(B(Some((Eq, Reg(0), Imm(0))), Addr(3)),
-           Load(r1, r0, Imm(0)),
-           Load(r2, r1, Imm(4)))
+    Vector(B(Some((Eq,Reg(0),Imm(0))),Addr(3)),
+           Load(r1,r0,Imm(0)),
+           Load(r2,r1,Imm(4)))
 
   def build_spectre_demo(secret_offset: Int): Vector[Instr] =
     Vector(
-      Mov(r4,r0),
-      Mov(r3,Imm(secret_offset-8)),
-      Mov(r0,Imm(9)),
-      B(Some(Ge,r0,Imm(8)),Addr(6)),
+      Mov(r3,Imm(0)),
+      Mov(r0,Imm(secret_offset)),
+      B(Some(Ge,r0,Imm(secret_offset)),Addr(5)),
       Load(r1,r3,r0),
-      Load(r2,r1,Imm(0)),
-      Load(r0,r4,Imm(0))
+      Load(r2,r1,Imm(0))
     )
 }
