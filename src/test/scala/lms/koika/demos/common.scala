@@ -170,6 +170,9 @@ object KoikaInterp {
         }
 
         // evict LRU and write back to memory
+        // CR-soon cwong: Triple-check that this is correct -- I think we might
+        // accidentally write back to memory too soon if a speculative
+        // instruction evicts an entry.
         s.mem(s.cache_keys(1)) = s.cache_vals(1)
 
         pushLRU(s, addr, result)

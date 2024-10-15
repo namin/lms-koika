@@ -22,8 +22,6 @@ class NanoRiscSpeculativeTests extends TutorialFunSuite {
     super.check(label, code, suffix)
 
   trait Driver extends GenericKoikaDriver[StateT, StateT] with KoikaInterp.Speculative {
-    // In the naive driver, we don't use caching or speculation, so we don't
-    // need to initialize everything except [regs], [timer] and [mem].
     override val init = s"""
 #define CACHE_LRU_SIZE 2
 void init(struct $stateT *s) {
