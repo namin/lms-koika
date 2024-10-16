@@ -45,6 +45,20 @@ void init(struct $stateT *s) {
 }"""
   }
 
+  test("nanorisc speculative shortcircuit") {
+    val snippet = new Driver {
+      override val prog = NanoRiscDemos.build_shortcircuit_demo(secret_offset, secret_size)
+
+      override val initialize_input = """
+for (int i=0; i<SECRET_SIZE; i++) {
+  int x = bounded(0, 20);
+  s1.mem[i] = x;
+  s2.mem[i] = x;
+}"""
+    }
+    check("shortcircuit", snippet.code)
+  }
+
   test("nanorisc speculative 2ctr") {
     val snippet = new Driver {
       override val prog = NanoRiscDemos.spec_small
