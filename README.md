@@ -1,5 +1,8 @@
 # LMS-Koika: Collapsing Towers for Side-Channel Security
 
+For detailed information about the artifact submission to PEPM'25, see
+[`src/test/scala/lms/koika/demos`](src/test/scala/lms/demos).
+
 LMS-Koika is an attempt to use staged programming to detect side-channel
 vulnerabilities in hardware-software systems via the [Collapsing Towers of
 Interpreters](https://www.cs.purdue.edu/homes/rompf/papers/amin-popl18.pdf)
@@ -8,32 +11,34 @@ micro-architectural details like speculation and data caching) alongside an
 assembly program intended to run on that hardware to produce a *residue* C
 program that is semantically equivalent to the original assembly program, but
 with all side-channel information encoded explicitly. The C file can then be
-analyzed by an off-the-shelf analyzer (we use CBMC) to check whether timing
-information and secret inputs are noninterfering.
+analyzed by an off-the-shelf analyzer to check whether timing information and
+secret inputs are noninterfering.
 
-As an example, see [interpcc.scala](src/test/scala/lms/koika/interpcc.scala) and
-one of its residues, such as [interpcc_2ct_ni.check.c](src/out/interpcc_2ct_ni.check.c).
+## Running the examples
 
-## Run
-- `sbt test`
+This project is built by the [sbt](https://www.scala-sbt.org/) build manager
+on Scala 2.12.8. We also depend on [lms-clean](https://github.com/TiarkRompf/lms-clean)
+([vendored](vendor/lms-clean)).
 
-## Troubleshoot
-- It works in Java v1.8. In Mac OS X: `export JAVA_HOME=$(/usr/libexec/java_home -v1.8)`
+Running `sbt test` from the root will regenerate all residues in [`src/out`](src/out).
+Snapshot files mostly follow the naming convention of `[testfile]_[suffix].check.c`,
+where `[testfile]` names the corresponding scala file in
+[`src/test/scala/lms/koika`](src/test/scala/lms/koika).
 
-# Contributing
+For more curated examples, see [`src/out/demos`](src/out/demos), generated from
+[`src/test/scala/lms/koika/demos`](src/test/scala/lms/demos) (see that folder
+for details).
 
-see [HACKING.md](HACKING.md)
+The examples are verified as follows:
 
-# [LMS Clean](https://github.com/TiarkRompf/lms-clean)
+`cbmc -DCBMC --verbosity 4 --slice-formula --unwind 1000 --refine --compact-trace <file.c>`
 
-## Optimizations
+For convenience, we also provide [`verify`](src/out/verify), invoked as
 
-The [`rewrite` method of `GraphBuilderOpt` in the LMS Backend](https://github.com/TiarkRompf/lms-clean/blob/master/src/main/scala/lms/core/backend.scala#L524) has the "smart constructor" optimizations that, for example, optimizes read after write for arrays and variables.
+`./verify <file1.c> <file2.c> ...`
 
-The [`GraphBuilderOpt` is linked through the `Adapter` object in the LMS Frontend](https://github.com/TiarkRompf/lms-clean/blob/master/src/main/scala/lms/core/stub.scala#L22). Because the linking is through an object as opposed to a trait, it's not easy to change -- so for now, we will experiment with more optimizations by changing LMS Clean directly.
+To determine which
 
-# [Bounded Model Checking](https://www.cprover.org/cbmc/) (also see [newer releases](https://github.com/diffblue/cbmc) and [doc](http://www.cprover.org/cprover-manual/))
-- cd `src/out`
-- `cbmc --compact-trace interpcc_2sct_alt.check.c`
-- `cbmc -DCBMC --refine --compact-trace --beautify --unwind 200 proci1b_staged_mul.check.c`
+## Further docs
 
+- [C Bounded Model Checking (CBMC)](https://www.cprover.org/cbmc/doc/manual.pdf)
