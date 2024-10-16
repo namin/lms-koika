@@ -23,7 +23,7 @@ where `[testfile]` names the corresponding scala file in
 [`src/test/scala/lms/koika`](src/test/scala/lms/koika).
 
 For more curated examples, see [`src/out/demos`](src/out/demos), generated from
-[`src/test/scala/lms/koika/demos`](src/test/scala/lms/demos) (see that folder
+[`src/test/scala/lms/koika/demos`](src/test/scala/lms/koika/demos) (see that folder
 for details).
 
 The examples are verified as follows:
@@ -34,7 +34,10 @@ For convenience, we also provide [`verify`](src/out/verify), invoked as
 
 `./verify <file1.c> <file2.c> ...`
 
-To determine which
+Note that not all `.check.c` files are expected to pass verification -- most
+are intended to demonstrate that CBMC can detect a vulnerability. We are working
+on making a comprehensive list of which files are expected to pass and which do
+not.
 
 ## Further docs
 
