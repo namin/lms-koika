@@ -1,8 +1,5 @@
 # LMS-Koika: Collapsing Towers for Side-Channel Security
 
-For detailed information about the artifact submission to PEPM'25, see
-[`src/test/scala/lms/koika/demos`](src/test/scala/lms/demos).
-
 LMS-Koika is an attempt to use staged programming to detect side-channel
 vulnerabilities in hardware-software systems via the [Collapsing Towers of
 Interpreters](https://www.cs.purdue.edu/homes/rompf/papers/amin-popl18.pdf)

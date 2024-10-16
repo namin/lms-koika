@@ -11,7 +11,8 @@ programs. The corresponding demos can be found in [`out/demos`](/src/out/demos).
 The provided sample programs and whether they are expected to pass CBMC are
 detailed in `programs.scala`.
 
-## Relation to PEPM'25
+<!-- TODO: Link to preprint once draft is finalized -->
+## Relation to the paper
 
 - The common nanoRISC definitions (Figure 2) can be found in [`main/.../nanorisc.scala`](/src/main/scala/lms/koika/frontend/nanorisc.scala).
 - Fig. 3 (The nanoRISC interpreter, staged) corresponds to [`execute`](common.scala#L48) in `common.scala`.
