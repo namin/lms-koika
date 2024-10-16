@@ -171,6 +171,139 @@ class ImpTest extends TutorialFunSuite {
     }
   }
 
+  @CStruct
+  case class CachedStateT(
+    vars: Array[Int],
+    mem: Array[Int],
+    timer: Int,
+    cache_keys: Array[Int],
+    cache_vals: Array[Int],
+  )
+
+  trait InterpImpCached extends Dsl
+    with StateOps
+    with ArrayOps
+    with CachedStateTOps
+  {
+    val lru_queue_size = 2
+
+    // TODO: How to make this inherit from `InterpImpTimed.State`?
+    class State private (
+      varLookup: Map[String, Int],
+      inner: Rep[CachedStateT]
+    ) extends AbstractRepState {
+
+      def readVar(ident: String): Rep[Int] = inner.vars(varLookup(ident))
+      def writeVar(ident: String, v: Rep[Int]): Rep[Unit] = inner.vars(varLookup(ident)) = v
+
+      def pushLRU(idx: Rep[Int], v: Rep[Int]): Rep[Unit] = {
+        inner.cache_keys(1) = inner.cache_keys(0)
+        inner.cache_vals(1) = inner.cache_vals(0)
+
+        inner.cache_keys(0) = idx
+        inner.cache_keys(0) = v
+      }
+
+      // We model the cache as a 2-entry LRU queue, where writes are reflected
+      // back to memory only when fully evicted.
+      //
+      // TODO (cam): should we `topFun` this?
+      def runCache(idx: Rep[Int], v: Option[Rep[Int]]): Rep[Int] =
+        if (inner.cache_keys(0) == idx) {
+          // key is at top of LRU queue, just update value
+          inner.timer += 1
+
+          v match {
+            case Some(x) => {
+              inner.cache_vals(0) = x
+              x
+            }
+            case None => inner.cache_vals(0)
+          }
+        }
+        else if (inner.cache_keys(1) == idx) {
+          // key is at tail of LRU queue, so set idx as head and push queue[0]
+          // back
+
+          val result = v match {
+            case Some(x) => x
+            case None => inner.cache_vals(1)
+          }
+
+          pushLRU(idx, result)
+
+          // TODO (cam): is this realistic?
+          inner.timer += 1
+
+          result
+        }
+        else {
+          // key not present
+          val result = v match {
+            case Some(x) => x
+            case None => inner.mem(idx)
+          }
+
+          // evict LRU and write back to memory
+          inner.mem(inner.cache_keys(1)) = inner.cache_vals(1)
+
+          // push queue[0] to queue[1]
+          pushLRU(idx, result)
+
+          inner.timer += 100
+
+          result
+        }
+
+      def readMem(idx: Rep[Int]): Rep[Int] = {
+        runCache(idx, None)
+      }
+
+      def writeMem(idx: Rep[Int], v: Rep[Int]): Rep[Unit] = {
+        runCache(idx, Some(v))
+        unit(())
+      }
+
+      override def execS(s: Stmt): Rep[Unit] = {
+        inner.timer += 1
+        super.execS(s)
+      }
+
+      override def evalE(e: Expr): Rep[Int] = {
+        e match {
+          case I(n) => ()
+          case V(id) => ()
+          case Deref(e) => ()
+          case Mul(e1, e2) => inner.timer += 1
+          case Add(e1, e2) => inner.timer += 1
+        }
+        super.evalE(e)
+      }
+
+      override def evalC(c: Cond): Rep[Boolean] = {
+        c match {
+          case T => ()
+          case F => ()
+          case Eq(e1, e2) => inner.timer += 1
+          case Le(e1, e2) => inner.timer += 1
+          case Not(c) => inner.timer += 1
+          case And(c1, c2) => inner.timer += 1
+        }
+        super.evalC(c)
+      }
+
+      def unwrap(): Rep[CachedStateT] = inner
+    }
+
+    object State {
+      def init(prg: List[Stmt], st: Rep[CachedStateT]): State = {
+        val prgVars = vars(prg)
+        val varLookup = prgVars.toList.zipWithIndex.toMap
+        new State(varLookup, st)
+      }
+    }
+  }
+
   abstract class DslDriverX[A:Manifest,B:Manifest] extends DslDriverC[A,B] { q =>
     val main: String = """
 int main(int argc, char *argv[]) {
@@ -304,6 +437,88 @@ int main(int argc, char* argv[]) {
     }
   }
 
+  abstract class CachedImpDriver
+    extends DslDriverX[CachedStateT, CachedStateT]
+    with InterpImpCached
+  {
+    val prog: List[Stmt]
+
+    def dyn(): String = {
+      val num_vars = vars(prog).size
+
+      s"""
+#define MEM_SIZE $mem_size
+#define SECRET_SIZE $secret_size
+#define SECRET_OFFSET $secret_offset
+#define CACHE_SIZE $lru_queue_size
+int bounded(int low, int high) {
+  int x = nondet_uint();
+  if (x < low) {
+    x = low;
+  }
+  if (x > high) {
+    x = high;
+  }
+  return x;
+}
+void init(struct CachedStateT *st) {
+  st->timer = 0;
+  st->mem = calloc(sizeof(int), MEM_SIZE);
+  st->vars = calloc(sizeof(int), $num_vars);
+  st->cache_keys = calloc(sizeof(int), CACHE_SIZE);
+}
+"""
+    }
+
+    override val main = """
+int main(int argc, char* argv[]) {
+  struct CachedStateT s1;
+  init(&s1);
+  struct CachedStateT s2;
+  init(&s2);
+
+  int i;
+  int x;
+
+  // initialize input
+  // TODO (cwong): this is ugly
+  for (i=0; i<SECRET_SIZE; i++) {
+    x = bounded(0, 20);
+    s1.mem[i] = x;
+    s2.mem[i] = x;
+  }
+
+  // initialize cache
+  for (i=0; i<CACHE_SIZE; i++) {
+    x = bounded(0, MEM_SIZE);
+
+    s1.cache_keys[i] = x;
+    s2.cache_keys[i] = x;
+
+    s1.cache_vals[i] = s1.mem[x];
+    s2.cache_vals[i] = s2.mem[x];
+  }
+
+  // initialize secret
+  for (i=0; i<SECRET_SIZE; i++) {
+    s1.mem[i+SECRET_OFFSET] = bounded(0, 20);
+    s2.mem[i+SECRET_OFFSET] = bounded(0, 20);
+  }
+
+  struct CachedStateT s1_ = Snippet(s1);
+  struct CachedStateT s2_ = Snippet(s2);
+  __CPROVER_assert(s1_.timer==s2_.timer, "timing leak");
+  return 0;
+}
+"""
+
+    def snippet(s: Rep[CachedStateT]): Rep[CachedStateT] = {
+      val ctx = State.init(prog, s)
+      ctx.exec(prog)
+      ctx.unwrap()
+    }
+  }
+
   /*
      result = 1;
      i = 0;
@@ -346,5 +561,12 @@ int main(int argc, char* argv[]) {
       override val prog = shortCircuitLoop
     }
     check("shortCircuit_timed", snippet.code)
+  }
+
+  test("shortCircuit_cached") {
+    val snippet = new CachedImpDriver {
+      override val prog = shortCircuitLoop
+    }
+    check("shortCircuit_cached", snippet.code)
   }
 }

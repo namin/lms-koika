@@ -452,5 +452,4 @@ int main(int argc, char* argv[]) {
     }
     check("3ct_ni", snippet.code)
   }
-
 }
