@@ -1,4 +1,4 @@
-# LMS-Koika: Collapsing Towers for Side-Channel Security
+# Collapsing Towers for Side-Channel Security
 
 We explore multi-stage programming to detect side-channel
 vulnerabilities in hardware-software systems via the technique of
