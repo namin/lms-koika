@@ -4,7 +4,7 @@ We explore multi-stage programming to detect side-channel
 vulnerabilities in hardware-software systems via the technique of
 _[Collapsing Towers of Interpreters](http://popl18.namin.net)_.
 The idea is to specialize
-assembly program
+an assembly program
 wrt
 a hardware processor written as a staged interpreter (including micro-architectural details like speculation and data caching) and
 and produce a *residue* C program
