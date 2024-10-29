@@ -14,8 +14,8 @@ An off-the-shelf analyzer (like CBMC) can then analyze the residue C file to che
 
 ## Running the examples
 
-This project is built by the [sbt](https://www.scala-sbt.org/) build manager
-on Scala 2.12.8. We also depend on [lms-clean](https://github.com/TiarkRompf/lms-clean)
+This project requires [sbt](https://www.scala-sbt.org/) and Java version 1.8.
+We depend on [lms-clean](https://github.com/TiarkRompf/lms-clean)
 ([vendored](vendor/lms-clean)).
 
 Running `sbt test` from the root will regenerate all residues in [`src/out`](src/out).
