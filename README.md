@@ -10,7 +10,7 @@ a hardware processor written as a staged interpreter (including micro-architectu
 and produce a *residue* C program
 semantically equivalent to the original assembly program
 but with explicit micro-architectural details, including the side-channel information reified into first-order variables.
-An off-the-shelf analyzer (like CBMC) can then analyze the residue C file to check whether the first-order timing and secret inputs are noninterfering.
+An off-the-shelf analyzer (like [CBMC](#CBMC)) can then analyze the residue C file to check whether the first-order timing and secret inputs are noninterfering.
 
 ## Running the examples
 
@@ -29,7 +29,7 @@ For more curated examples, see [`src/out/demos`](src/out/demos), generated from
 [`src/test/scala/lms/koika/demos`](src/test/scala/lms/koika/demos) (see that folder
 for details).
 
-The examples are verified as follows:
+The examples are verified using [CBMC](#CBMC) as follows:
 
 `cbmc -DCBMC --verbosity 4 --slice-formula --unwind 1000 --refine --compact-trace <file.c>`
 
@@ -42,6 +42,10 @@ are intended to demonstrate that CBMC can detect a vulnerability. We are working
 on making a comprehensive list of which files are expected to pass and which do
 not.
 
-## Further docs
+## CBMC
 
-- [C Bounded Model Checking (CBMC)](https://www.cprover.org/cbmc/doc/manual.pdf)
+We use the C Bounded Model Checker (CBMC) as an off-the-shelf analyzer since our residue C programs are ordinary programs where timing is an ordinary first-order variable. Some pointers:
+
+- [original CMBC website](https://www.cprover.org/cbmc/)
+- [a maintained implementation](https://github.com/diffblue/cbmc) with [latest releases](https://github.com/diffblue/cbmc/releases)
+- [original manual](http://www.cprover.org/cprover-manual/) also in [PDF](https://www.cprover.org/cbmc/doc/manual.pdf)
