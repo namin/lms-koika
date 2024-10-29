@@ -18,7 +18,9 @@ This project requires [sbt](https://www.scala-sbt.org/) and Java version 1.8.
 We depend on [lms-clean](https://github.com/TiarkRompf/lms-clean)
 ([vendored](vendor/lms-clean)).
 
-Running `sbt test` from the root will regenerate all residues in [`src/out`](src/out).
+Running `sbt test` from the root will run all the tests,
+generating `.actual` files and checking them against the `.check` files in [`src/out`](src/out).
+Failing tests will leave the generated `.actual` files for inspection.
 Snapshot files mostly follow the naming convention of `[testfile]_[suffix].check.c`,
 where `[testfile]` names the corresponding scala file in
 [`src/test/scala/lms/koika`](src/test/scala/lms/koika).
