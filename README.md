@@ -14,7 +14,7 @@ An off-the-shelf analyzer (like [CBMC](#CBMC)) can then analyze the residue C fi
 
 ## Running the examples
 
-This project requires [sbt](https://www.scala-sbt.org/) and Java version 1.8.
+This generator project requires [sbt](https://www.scala-sbt.org/) and Java version 1.8.
 We depend on [lms-clean](https://github.com/TiarkRompf/lms-clean)
 ([vendored](vendor/lms-clean)).
 
