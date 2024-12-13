@@ -12,6 +12,11 @@ semantically equivalent to the original assembly program
 but with explicit micro-architectural details, including the side-channel information reified into first-order variables.
 An off-the-shelf analyzer (like [CBMC](#CBMC)) can then analyze the residue C file to check whether the first-order timing and secret inputs are noninterfering.
 
+## Publications
+
+This work is described in detail in [PEPM '25](https://popl25.sigplan.org/details/pepm-2025-papers/4/Collapsing-Towers-for-Side-Channel-Security-Short-Paper-).
+The source code corresponding to that paper can be found in [`src/test/scala/lms/koika/demos`](src/test/scala/lms/koika/demos).
+
 ## Running the examples
 
 This generator project requires [sbt](https://www.scala-sbt.org/) and Java version 1.8.
